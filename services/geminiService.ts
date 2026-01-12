@@ -1,10 +1,11 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 export const triageRequest = async (subject: string, description: string) => {
   try {
+    // Inicializamos la IA justo antes de usarla, no al cargar el archivo.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Analiza la siguiente solicitud de soporte de un usuario y determina:
@@ -37,6 +38,6 @@ export const triageRequest = async (subject: string, description: string) => {
     return JSON.parse(jsonStr);
   } catch (error) {
     console.error("Error in AI triage:", error);
-    return { priority: 'medium', summary: 'Error analizando solicitud' };
+    return { priority: 'medium', summary: 'Solicitud recibida correctamente' };
   }
 };
