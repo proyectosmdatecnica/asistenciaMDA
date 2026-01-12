@@ -1,9 +1,18 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import Layout from './components/Layout';
 import AgentDashboard from './components/AgentDashboard';
 import UserRequestView from './components/UserRequestView';
 import { SupportRequest, QueueStats, AppRole } from './types';
 import { Loader2 } from 'lucide-react';
+
+// === CONFIGURACIÓN DE AGENTES ===
+// Añade aquí los correos de las personas que atenderán los pedidos
+const AUTHORIZED_AGENTS = [
+  'soporte@tuempresa.com',
+  'admin@tuempresa.com',
+  'tu-correo@ejemplo.com' // Reemplaza con tu correo de Teams para probar
+];
 
 const INITIAL_REQUESTS: SupportRequest[] = [
   {
@@ -26,9 +35,9 @@ const App: React.FC = () => {
   const [currentUserName, setCurrentUserName] = useState('Usuario Invitado');
   const [isTeamsReady, setIsTeamsReady] = useState(false);
   const [stats, setStats] = useState<QueueStats>({
-    averageWaitTime: 8,
+    averageWaitTime: 5,
     activeRequests: 0,
-    completedToday: 24
+    completedToday: 0
   });
 
   useEffect(() => {
@@ -38,19 +47,48 @@ const App: React.FC = () => {
           const teams = (window as any).microsoftTeams;
           await teams.app.initialize();
           const context = await teams.app.getContext();
+          
           if (context.user?.userPrincipalName) {
-            setCurrentUserId(context.user.userPrincipalName);
-            setCurrentUserName(context.user.displayName || context.user.userPrincipalName);
+            const upn = context.user.userPrincipalName.toLowerCase();
+            setCurrentUserId(upn);
+            setCurrentUserName(context.user.displayName || upn);
+
+            // DETECCIÓN AUTOMÁTICA DE ROL
+            if (AUTHORIZED_AGENTS.map(a => a.toLowerCase()).includes(upn)) {
+              setRole('agent');
+              console.log("Rol detectado: Agente de Soporte");
+            } else {
+              setRole('user');
+              console.log("Rol detectado: Usuario Final");
+            }
           }
         }
       } catch (e) {
-        console.warn("Teams SDK no disponible, usando modo local");
+        console.warn("Ejecutando fuera de Teams o error de SDK. Usando modo invitado.");
       } finally {
         setIsTeamsReady(true);
       }
     };
     initializeTeams();
   }, []);
+
+  // Recalcular estadísticas cuando cambian los pedidos
+  useEffect(() => {
+    const completed = requests.filter(r => r.status === 'completed');
+    if (completed.length > 0) {
+      const totalWait = completed.reduce((acc, curr) => {
+        const wait = (curr.startedAt || curr.createdAt) - curr.createdAt;
+        return acc + wait;
+      }, 0);
+      const avgMins = Math.round((totalWait / completed.length) / 60000) || 1;
+      setStats(prev => ({
+        ...prev,
+        averageWaitTime: avgMins,
+        completedToday: completed.length,
+        activeRequests: requests.filter(r => r.status === 'waiting' || r.status === 'in-progress').length
+      }));
+    }
+  }, [requests]);
 
   const myRequest = requests.find(r => r.userId === currentUserId && (r.status === 'waiting' || r.status === 'in-progress')) || null;
   
@@ -92,16 +130,20 @@ const App: React.FC = () => {
   if (!isTeamsReady) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-[#f5f5f5]">
-        <div className="bg-white p-8 rounded-2xl shadow-xl flex flex-col items-center">
-          <Loader2 className="animate-spin text-[#5b5fc7] mb-4" size={48} />
-          <p className="font-bold text-gray-700 font-sans">Iniciando aplicación...</p>
+        <div className="bg-white p-10 rounded-[40px] shadow-2xl flex flex-col items-center border border-gray-100">
+          <Loader2 className="animate-spin text-[#5b5fc7] mb-6" size={60} />
+          <h2 className="text-xl font-black text-gray-800">Conectando con Teams</h2>
+          <p className="text-gray-400 mt-2 font-medium">Validando identidad del usuario...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <Layout role={role} onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')}>
+    <Layout role={role} onSwitchRole={() => {
+      // Dejamos el switch solo para que tú puedas probar ambas vistas fácilmente
+      setRole(role === 'user' ? 'agent' : 'user');
+    }}>
       {role === 'agent' ? (
         <AgentDashboard 
           requests={requests} 
