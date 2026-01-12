@@ -4,40 +4,31 @@ import * as sql from "mssql";
 
 const sqlConfigString = process.env.SqlConnectionString;
 
-/**
- * HTTP Trigger handler for support requests. 
- * Migrated to Azure Functions v4 to resolve type mismatch errors (AzureFunction and Context not exported).
- */
 export async function requestsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    context.log('HTTP trigger function processed a request.');
+    context.log(`Método ${req.method} procesado en /api/requests`);
 
     if (!sqlConfigString) {
-        return { 
-            status: 500, 
-            body: "Error: La variable SqlConnectionString no está configurada en Azure." 
-        };
+        return { status: 500, body: "Error: Falta SqlConnectionString en Azure." };
     }
 
     let pool;
     try {
-        // Fix: Use the connection string directly as mssql.connect expects a string or a structured config object.
-        // The previous structured object was missing required properties like 'server'.
+        // Configuramos la conexión con parámetros de seguridad de Azure
         pool = await sql.connect(sqlConfigString);
         const method = req.method.toLowerCase();
-        // In v4, route parameters are accessed via req.params instead of context.bindingData
         const id = req.params.id;
 
         if (method === "get") {
             const result = await pool.request().query("SELECT * FROM requests ORDER BY createdAt DESC");
             return {
                 status: 200,
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(result.recordset)
+                jsonBody: result.recordset
             };
         } 
         else if (method === "post") {
-            // Fix: req.body in v4 is a ReadableStream. Use req.json() to parse it to avoid "Property does not exist" errors.
             const r: any = await req.json();
+            if (!r || !r.id) return { status: 400, body: "Datos de ticket inválidos." };
+
             await pool.request()
                 .input('id', sql.VarChar, r.id)
                 .input('userId', sql.VarChar, r.userId)
@@ -50,42 +41,39 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                 .input('aiSummary', sql.Text, r.aiSummary || '')
                 .query(`INSERT INTO requests (id, userId, userName, subject, description, status, createdAt, priority, aiSummary) 
                         VALUES (@id, @userId, @userName, @subject, @description, @status, @createdAt, @priority, @aiSummary)`);
-            return { status: 201, body: JSON.stringify({ success: true }) };
+            
+            return { status: 201, jsonBody: { success: true } };
         }
         else if (method === "patch") {
-            if (!id) {
-                return { status: 400, body: "ID de ticket faltante en la ruta." };
-            }
-            // Fix: req.body in v4 is a ReadableStream. Use req.json() to parse it.
+            if (!id) return { status: 400, body: "ID requerido." };
             const body: any = await req.json();
-            const { status, startedAt, completedAt } = body;
+            
             await pool.request()
                 .input('id', sql.VarChar, id)
-                .input('status', sql.VarChar, status)
-                .input('startedAt', sql.BigInt, startedAt || null)
-                .input('completedAt', sql.BigInt, completedAt || null)
+                .input('status', sql.VarChar, body.status)
+                .input('startedAt', sql.BigInt, body.startedAt || null)
+                .input('completedAt', sql.BigInt, body.completedAt || null)
                 .query(`UPDATE requests SET 
                         status = @status, 
                         startedAt = COALESCE(@startedAt, startedAt), 
                         completedAt = COALESCE(@completedAt, completedAt) 
                         WHERE id = @id`);
-            return { status: 200, body: JSON.stringify({ success: true }) };
+            
+            return { status: 200, jsonBody: { success: true } };
         }
         
-        return { status: 405, body: "Method Not Allowed" };
+        return { status: 405, body: "Método no permitido" };
     } catch (err: any) {
-        // Fix: In v4 InvocationContext, use context.error instead of context.log.error
-        context.error("Error detallado:", err);
+        context.error("Error en API:", err.message);
         return { 
             status: 500, 
-            body: `Error de Base de Datos: ${err.message}. Verifica que la tabla 'requests' exista y los permisos de red.` 
+            body: `Error de Servidor: ${err.message}` 
         };
     } finally {
         if (pool) await pool.close();
     }
 }
 
-// Explicitly register the function with the Azure Functions v4 app object
 app.http('requests', {
     methods: ['GET', 'POST', 'PATCH'],
     authLevel: 'anonymous',

@@ -2,42 +2,36 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
 export const triageRequest = async (subject: string, description: string) => {
+  const DEFAULT_TRIAGE = { priority: 'medium', summary: 'Solicitud estándar recibida' };
+  
+  // Verificamos si la API Key existe en el entorno antes de inicializar
+  const apiKey = process.env.API_KEY;
+  if (!apiKey || apiKey === "undefined") {
+    console.warn("Gemini API Key no configurada. Usando triaje por defecto.");
+    return DEFAULT_TRIAGE;
+  }
+
   try {
-    // Inicializamos la IA justo antes de usarla, no al cargar el archivo.
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Analiza la siguiente solicitud de soporte de un usuario y determina:
-      1. Prioridad (Baja, Media, Alta).
-      2. Un resumen técnico corto (máx 10 palabras) para el agente.
-      
-      Asunto: ${subject}
-      Descripción: ${description}`,
+      contents: `Prioriza y resume esta solicitud de IT. Asunto: ${subject}. Desc: ${description}`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            priority: {
-              type: Type.STRING,
-              enum: ['low', 'medium', 'high'],
-              description: 'Nivel de urgencia detectado',
-            },
-            summary: {
-              type: Type.STRING,
-              description: 'Resumen conciso para el agente técnico',
-            },
+            priority: { type: Type.STRING, enum: ['low', 'medium', 'high'] },
+            summary: { type: Type.STRING },
           },
           required: ['priority', 'summary'],
         },
       },
     });
 
-    const jsonStr = response.text.trim();
-    return JSON.parse(jsonStr);
+    return JSON.parse(response.text);
   } catch (error) {
-    console.error("Error in AI triage:", error);
-    return { priority: 'medium', summary: 'Solicitud recibida correctamente' };
+    console.error("Error en triaje IA:", error);
+    return DEFAULT_TRIAGE;
   }
 };
