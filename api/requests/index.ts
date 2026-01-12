@@ -1,0 +1,1 @@
+// Archivo obsoleto - Utilizar api/index.ts
