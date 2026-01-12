@@ -4,55 +4,79 @@ import Layout from './components/Layout';
 import AgentDashboard from './components/AgentDashboard';
 import UserRequestView from './components/UserRequestView';
 import { SupportRequest, QueueStats, AppRole } from './types';
+import { Loader2 } from 'lucide-react';
 
 const INITIAL_REQUESTS: SupportRequest[] = [
   {
-    id: '1',
+    id: 'T-8821',
     userId: 'u1',
-    userName: 'Juan Perez',
-    subject: 'Error al iniciar Teams',
-    description: 'La aplicación se queda cargando eternamente y luego da error de conexión.',
+    userName: 'Carlos Rodriguez',
+    subject: 'Problema con VPN',
+    description: 'No puedo conectar a la red interna desde mi casa.',
     status: 'waiting',
-    createdAt: Date.now() - 15 * 60000,
+    createdAt: Date.now() - 12 * 60000,
     priority: 'high',
-    aiSummary: 'Fallo de inicio sesión Teams'
+    aiSummary: 'Fallo conexión VPN remota'
   },
   {
-    id: '2',
+    id: 'T-9902',
     userId: 'u2',
-    userName: 'Maria Garcia',
-    subject: 'Instalación de Software',
-    description: 'Necesito que me instalen VS Code para el proyecto nuevo.',
+    userName: 'Ana Belén',
+    subject: 'Solicitud de monitor',
+    description: 'Mi monitor secundario parpadea constantemente.',
     status: 'waiting',
-    createdAt: Date.now() - 5 * 60000,
+    createdAt: Date.now() - 4 * 60000,
     priority: 'medium',
-    aiSummary: 'Pedido instalación VS Code'
+    aiSummary: 'Fallo hardware monitor'
   }
 ];
 
 const App: React.FC = () => {
   const [role, setRole] = useState<AppRole>('user');
   const [requests, setRequests] = useState<SupportRequest[]>(INITIAL_REQUESTS);
-  const [currentUserId] = useState('user-99'); // Mock logged in user
+  const [currentUserId, setCurrentUserId] = useState('user-guest');
+  const [currentUserName, setCurrentUserName] = useState('Usuario Invitado');
+  const [isTeamsReady, setIsTeamsReady] = useState(false);
   const [stats, setStats] = useState<QueueStats>({
     averageWaitTime: 8,
     activeRequests: 0,
-    completedToday: 12
+    completedToday: 24
   });
 
-  // Calculate current user's active request
+  // Efecto para inicializar Teams SDK
+  useEffect(() => {
+    const initializeTeams = async () => {
+      try {
+        if ((window as any).microsoftTeams) {
+          const teams = (window as any).microsoftTeams;
+          await teams.app.initialize();
+          const context = await teams.app.getContext();
+          if (context.user?.userPrincipalName) {
+            setCurrentUserId(context.user.userPrincipalName);
+            setCurrentUserName(context.user.displayName || context.user.userPrincipalName);
+          }
+        }
+      } catch (e) {
+        console.warn("Teams SDK no disponible, usando modo local");
+      } finally {
+        setIsTeamsReady(true);
+      }
+    };
+    initializeTeams();
+  }, []);
+
+  // Lógica de cálculo de posición y tiempos
   const myRequest = requests.find(r => r.userId === currentUserId && (r.status === 'waiting' || r.status === 'in-progress')) || null;
   
-  // Calculate position in queue
   const myQueuePosition = myRequest && myRequest.status === 'waiting' 
     ? requests.filter(r => r.status === 'waiting' && r.createdAt <= myRequest.createdAt).length 
     : 0;
 
   const handleCreateRequest = useCallback((data: Partial<SupportRequest>) => {
     const newRequest: SupportRequest = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: `T-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`,
       userId: currentUserId,
-      userName: 'Tú (Usuario Interno)',
+      userName: currentUserName,
       subject: data.subject || '',
       description: data.description || '',
       status: 'waiting',
@@ -61,7 +85,7 @@ const App: React.FC = () => {
       aiSummary: data.aiSummary
     };
     setRequests(prev => [...prev, newRequest]);
-  }, [currentUserId]);
+  }, [currentUserId, currentUserName]);
 
   const handleUpdateStatus = useCallback((id: string, newStatus: SupportRequest['status']) => {
     setRequests(prev => prev.map(req => {
@@ -79,10 +103,23 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const toggleRole = () => setRole(prev => prev === 'user' ? 'agent' : 'user');
+  const handleCancelRequest = useCallback((id: string) => {
+    setRequests(prev => prev.filter(r => r.id !== id));
+  }, []);
+
+  if (!isTeamsReady) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-[#f5f5f5]">
+        <div className="bg-white p-8 rounded-2xl shadow-xl flex flex-col items-center">
+          <Loader2 className="animate-spin text-[#5b5fc7] mb-4" size={48} />
+          <p className="font-bold text-gray-700 animate-pulse">Sincronizando con Teams...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <Layout role={role} onSwitchRole={toggleRole}>
+    <Layout role={role} onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')}>
       {role === 'agent' ? (
         <AgentDashboard 
           requests={requests} 
@@ -95,6 +132,7 @@ const App: React.FC = () => {
           queuePosition={myQueuePosition}
           averageWaitTime={stats.averageWaitTime}
           onSubmit={handleCreateRequest}
+          onCancel={handleCancelRequest}
         />
       )}
     </Layout>
