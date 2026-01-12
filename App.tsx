@@ -16,17 +16,6 @@ const INITIAL_REQUESTS: SupportRequest[] = [
     createdAt: Date.now() - 12 * 60000,
     priority: 'high',
     aiSummary: 'Fallo conexión VPN remota'
-  },
-  {
-    id: 'T-9902',
-    userId: 'u2',
-    userName: 'Ana Belén',
-    subject: 'Solicitud de monitor',
-    description: 'Mi monitor secundario parpadea constantemente.',
-    status: 'waiting',
-    createdAt: Date.now() - 4 * 60000,
-    priority: 'medium',
-    aiSummary: 'Fallo hardware monitor'
   }
 ];
 
@@ -94,10 +83,6 @@ const App: React.FC = () => {
       }
       return req;
     }));
-
-    if (newStatus === 'completed') {
-      setStats(prev => ({ ...prev, completedToday: prev.completedToday + 1 }));
-    }
   }, []);
 
   const handleCancelRequest = useCallback((id: string) => {
@@ -109,7 +94,7 @@ const App: React.FC = () => {
       <div className="h-screen w-full flex flex-col items-center justify-center bg-[#f5f5f5]">
         <div className="bg-white p-8 rounded-2xl shadow-xl flex flex-col items-center">
           <Loader2 className="animate-spin text-[#5b5fc7] mb-4" size={48} />
-          <p className="font-bold text-gray-700 animate-pulse">Sincronizando con Teams...</p>
+          <p className="font-bold text-gray-700">Iniciando aplicación...</p>
         </div>
       </div>
     );
