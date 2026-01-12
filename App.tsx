@@ -94,7 +94,7 @@ const App: React.FC = () => {
       <div className="h-screen w-full flex flex-col items-center justify-center bg-[#f5f5f5]">
         <div className="bg-white p-8 rounded-2xl shadow-xl flex flex-col items-center">
           <Loader2 className="animate-spin text-[#5b5fc7] mb-4" size={48} />
-          <p className="font-bold text-gray-700">Iniciando aplicación...</p>
+          <p className="font-bold text-gray-700 font-sans">Iniciando aplicación...</p>
         </div>
       </div>
     );
