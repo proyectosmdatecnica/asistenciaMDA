@@ -1,14 +1,19 @@
 
-import { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
+import { HttpRequest, InvocationContext, HttpResponseInit } from "@azure/functions";
 import * as sql from "mssql";
 
 const sqlConfig = process.env.SqlConnectionString;
 
-// Fix: Use the newer HttpRequest and InvocationContext types for Azure Functions v4.
-// This replaces AzureFunction and Context which are not exported in the v4 library.
-export default async function (req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+// Fix: Swapped parameters to match Azure Functions v4 signature (req, context)
+// Fix: Use InvocationContext and HttpResponseInit instead of Context and void
+const httpTrigger = async function (req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    context.log('Procesando solicitud de soporte...');
+
     if (!sqlConfig) {
-        return { status: 500, body: "Error: SqlConnectionString no configurada" };
+        return {
+            status: 500,
+            body: "Error de configuración: SqlConnectionString no encontrada en las variables de entorno de Azure."
+        };
     }
 
     let pool;
@@ -16,20 +21,24 @@ export default async function (req: HttpRequest, context: InvocationContext): Pr
         pool = await sql.connect(sqlConfig);
         const method = req.method.toLowerCase();
         
-        // Fix: In v4, query parameters are in a URLSearchParams object (use .get()) 
-        // and route parameters are available via req.params.
-        const id = req.params.id || req.query.get('id');
+        // Fix: In v4, route parameters are accessed via req.params instead of context.bindingData
+        const id = req.params.id;
 
         if (method === "get") {
             const result = await pool.request().query("SELECT * FROM requests ORDER BY createdAt DESC");
-            return { 
+            return {
                 status: 200,
-                jsonBody: result.recordset 
+                headers: { "Content-Type": "application/json" },
+                jsonBody: result.recordset
             };
         } 
         else if (method === "post") {
-            // Fix: req.body is a stream in v4; use await req.json() to parse the body.
+            // Fix: req.body is a ReadableStream in v4; use await req.json() to parse the payload
             const r = await req.json() as any;
+            if (!r || !r.id) {
+                return { status: 400, body: "Cuerpo de solicitud inválido" };
+            }
+            
             await pool.request()
                 .input('id', sql.VarChar, r.id)
                 .input('userId', sql.VarChar, r.userId)
@@ -42,13 +51,14 @@ export default async function (req: HttpRequest, context: InvocationContext): Pr
                 .input('aiSummary', sql.Text, r.aiSummary || '')
                 .query(`INSERT INTO requests (id, userId, userName, subject, description, status, createdAt, priority, aiSummary) 
                         VALUES (@id, @userId, @userName, @subject, @description, @status, @createdAt, @priority, @aiSummary)`);
+            
             return { status: 201, jsonBody: { success: true } };
         }
         else if (method === "patch") {
             if (!id) {
-                return { status: 400, body: "ID requerido" };
+                return { status: 400, body: "ID de ticket requerido para actualización" };
             }
-            // Fix: Body is a stream in v4; use await req.json() to parse it.
+            // Fix: req.body is a ReadableStream in v4; use await req.json() to parse the payload
             const body = await req.json() as any;
             const { status, startedAt, completedAt } = body;
             await pool.request()
@@ -61,18 +71,24 @@ export default async function (req: HttpRequest, context: InvocationContext): Pr
                         startedAt = COALESCE(@startedAt, startedAt), 
                         completedAt = COALESCE(@completedAt, completedAt) 
                         WHERE id = @id`);
+            
             return { status: 200, jsonBody: { success: true } };
         }
-        
-        return { status: 405, body: "Method Not Allowed" };
+        else {
+            return { status: 405, body: "Método no permitido" };
+        }
     } catch (err) {
-        // Fix: Use context.error for logging in v4 InvocationContext.
-        context.error("SQL Error:", err);
+        // Fix: Use context.error instead of context.log.error in v4
+        context.error("Error en la base de datos:", err);
         return { 
             status: 500, 
-            body: `Error: ${err instanceof Error ? err.message : 'Unknown'}` 
+            body: `Error interno: ${err instanceof Error ? err.message : 'Error desconocido'}` 
         };
     } finally {
-        if (pool) await pool.close();
+        if (pool) {
+            await pool.close();
+        }
     }
-}
+};
+
+export default httpTrigger;
