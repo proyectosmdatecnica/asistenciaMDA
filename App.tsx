@@ -1,14 +1,15 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import Layout from './components/Layout';
 import AgentDashboard from './components/AgentDashboard';
 import UserRequestView from './components/UserRequestView';
 import { SupportRequest, QueueStats, AppRole } from './types';
-import { Loader2 } from 'lucide-react';
+import { storageService } from './services/dataService';
+import { Loader2, CloudCheck, Database, Server } from 'lucide-react';
 
-// === CONFIGURACIÓN DE AGENTES ===
 const AUTHORIZED_AGENTS = [
   'mbozzone@intecsoft.com.ar',
-  'test@intecsoft.com.ar'
+  'ftokashiki@intecsoft.com.ar'
 ];
 
 const App: React.FC = () => {
@@ -17,34 +18,31 @@ const App: React.FC = () => {
   const [currentUserId, setCurrentUserId] = useState('user-guest');
   const [currentUserName, setCurrentUserName] = useState('Usuario Invitado');
   const [isTeamsReady, setIsTeamsReady] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncStatus, setLastSyncStatus] = useState<'online' | 'offline'>('online');
   const [stats, setStats] = useState<QueueStats>({
     averageWaitTime: 5,
     activeRequests: 0,
     completedToday: 0
   });
 
-  // 1. CARGAR DATOS PERSISTIDOS AL INICIO
-  useEffect(() => {
-    const savedRequests = localStorage.getItem('teams_support_queue');
-    if (savedRequests) {
-      try {
-        setRequests(JSON.parse(savedRequests));
-      } catch (e) {
-        console.error("Error cargando caché de pedidos", e);
-      }
+  const refreshData = useCallback(async (silent = false) => {
+    if (!silent) setIsSyncing(true);
+    try {
+      const data = await storageService.fetchAllRequests();
+      setRequests(data);
+      setLastSyncStatus('online');
+      localStorage.setItem('teams_support_cache', JSON.stringify(data));
+    } catch (e) {
+      setLastSyncStatus('offline');
+    } finally {
+      if (!silent) setIsSyncing(false);
     }
   }, []);
 
-  // 2. GUARDAR DATOS CUANDO CAMBIAN
   useEffect(() => {
-    if (requests.length > 0) {
-      localStorage.setItem('teams_support_queue', JSON.stringify(requests));
-    }
-  }, [requests]);
-
-  // 3. INICIALIZAR TEAMS Y DETECTAR ROL
-  useEffect(() => {
-    const initializeTeams = async () => {
+    const init = async () => {
+      await refreshData();
       try {
         if ((window as any).microsoftTeams) {
           const teams = (window as any).microsoftTeams;
@@ -55,24 +53,25 @@ const App: React.FC = () => {
             const upn = context.user.userPrincipalName.toLowerCase();
             setCurrentUserId(upn);
             setCurrentUserName(context.user.displayName || upn);
-
             if (AUTHORIZED_AGENTS.map(a => a.toLowerCase()).includes(upn)) {
               setRole('agent');
-            } else {
-              setRole('user');
             }
           }
         }
       } catch (e) {
-        console.warn("Modo local: Teams no detectado.");
+        console.warn("Teams SDK no detectado.");
       } finally {
         setIsTeamsReady(true);
       }
     };
-    initializeTeams();
-  }, []);
+    init();
+  }, [refreshData]);
 
-  // 4. ACTUALIZAR ESTADÍSTICAS EN TIEMPO REAL
+  useEffect(() => {
+    const interval = setInterval(() => refreshData(true), 10000); 
+    return () => clearInterval(interval);
+  }, [refreshData]);
+
   useEffect(() => {
     const completed = requests.filter(r => r.status === 'completed');
     const active = requests.filter(r => r.status === 'waiting' || r.status === 'in-progress');
@@ -80,8 +79,8 @@ const App: React.FC = () => {
     let avgMins = 5;
     if (completed.length > 0) {
       const totalWait = completed.reduce((acc, curr) => {
-        const wait = (curr.startedAt || curr.createdAt) - curr.createdAt;
-        return acc + wait;
+        const start = curr.startedAt || curr.createdAt;
+        return acc + (start - curr.createdAt);
       }, 0);
       avgMins = Math.max(1, Math.round((totalWait / completed.length) / 60000));
     }
@@ -93,13 +92,7 @@ const App: React.FC = () => {
     });
   }, [requests]);
 
-  const myRequest = requests.find(r => r.userId === currentUserId && (r.status === 'waiting' || r.status === 'in-progress')) || null;
-  
-  const myQueuePosition = myRequest && myRequest.status === 'waiting' 
-    ? requests.filter(r => r.status === 'waiting' && r.createdAt <= myRequest.createdAt).length 
-    : 0;
-
-  const handleCreateRequest = useCallback((data: Partial<SupportRequest>) => {
+  const handleCreateRequest = useCallback(async (data: Partial<SupportRequest>) => {
     const newRequest: SupportRequest = {
       id: `T-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`,
       userId: currentUserId,
@@ -111,52 +104,62 @@ const App: React.FC = () => {
       priority: data.priority || 'medium',
       aiSummary: data.aiSummary
     };
-    setRequests(prev => [...prev, newRequest]);
-  }, [currentUserId, currentUserName]);
+    
+    setIsSyncing(true);
+    const success = await storageService.saveRequest(newRequest);
+    if (success) {
+      await refreshData(true);
+    } else {
+      const updated = [...requests, newRequest];
+      setRequests(updated);
+      localStorage.setItem('teams_support_cache', JSON.stringify(updated));
+    }
+    setIsSyncing(false);
+  }, [currentUserId, currentUserName, requests, refreshData]);
 
-  const handleUpdateStatus = useCallback((id: string, newStatus: SupportRequest['status']) => {
-    setRequests(prev => prev.map(req => {
-      if (req.id === id) {
-        const updated = { ...req, status: newStatus };
-        if (newStatus === 'in-progress') updated.startedAt = Date.now();
-        if (newStatus === 'completed') updated.completedAt = Date.now();
-        return updated;
-      }
-      return req;
-    }));
-  }, []);
-
-  const handleCancelRequest = useCallback((id: string) => {
-    setRequests(prev => prev.filter(r => r.id !== id));
-  }, []);
+  const handleUpdateStatus = useCallback(async (id: string, newStatus: SupportRequest['status']) => {
+    setIsSyncing(true);
+    const success = await storageService.updateRequestStatus(id, newStatus);
+    if (success) {
+      await refreshData(true);
+    } else {
+      const updated = requests.map(r => r.id === id ? { ...r, status: newStatus } : r);
+      setRequests(updated);
+    }
+    setIsSyncing(false);
+  }, [requests, refreshData]);
 
   if (!isTeamsReady) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-[#f5f5f5]">
-        <div className="bg-white p-12 rounded-[48px] shadow-2xl flex flex-col items-center border border-white">
-          <Loader2 className="animate-spin text-[#5b5fc7] mb-6" size={54} />
-          <h2 className="text-xl font-bold text-gray-800">Cargando Soporte IT</h2>
-          <p className="text-gray-400 mt-2 text-sm">Sincronizando con Microsoft Teams...</p>
-        </div>
+        <Loader2 className="animate-spin text-[#5b5fc7] mb-4" size={48} />
+        <p className="text-gray-500 font-bold tracking-tight">Cargando Sistema de Soporte...</p>
       </div>
     );
   }
 
   return (
     <Layout role={role} onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')}>
+      {/* Estado de Sincronización Serverless */}
+      <div className="fixed bottom-6 right-6 z-50">
+        <div className={`flex items-center space-x-2 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-2xl transition-all border bg-white ${
+          lastSyncStatus === 'online' ? 'text-emerald-600 border-emerald-100' : 'text-gray-400 border-gray-100'
+        }`}>
+          {lastSyncStatus === 'online' ? <Server size={14} /> : <Database size={14} />}
+          <span>{lastSyncStatus === 'online' ? 'API Azure: Conectada' : 'Modo Local'}</span>
+          {isSyncing && <Loader2 size={12} className="animate-spin ml-2" />}
+        </div>
+      </div>
+
       {role === 'agent' ? (
-        <AgentDashboard 
-          requests={requests} 
-          stats={stats} 
-          onUpdateStatus={handleUpdateStatus} 
-        />
+        <AgentDashboard requests={requests} stats={stats} onUpdateStatus={handleUpdateStatus} />
       ) : (
         <UserRequestView 
-          activeRequest={myRequest}
-          queuePosition={myQueuePosition}
+          activeRequest={requests.find(r => r.userId === currentUserId && (r.status === 'waiting' || r.status === 'in-progress')) || null}
+          queuePosition={requests.filter(r => r.status === 'waiting' && r.createdAt <= (requests.find(u => u.userId === currentUserId)?.createdAt || 0)).length}
           averageWaitTime={stats.averageWaitTime}
           onSubmit={handleCreateRequest}
-          onCancel={handleCancelRequest}
+          onCancel={(id) => handleUpdateStatus(id, 'cancelled')}
         />
       )}
     </Layout>
