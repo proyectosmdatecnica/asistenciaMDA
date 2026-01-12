@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import Layout from './components/Layout';
-import AgentDashboard from './components/AgentDashboard';
-import UserRequestView from './components/UserRequestView';
-import { SupportRequest, QueueStats, AppRole } from './types';
+import Layout from './components/Layout.tsx';
+import AgentDashboard from './components/AgentDashboard.tsx';
+import UserRequestView from './components/UserRequestView.tsx';
+import { SupportRequest, QueueStats, AppRole } from './types.ts';
 import { Loader2 } from 'lucide-react';
 
 const INITIAL_REQUESTS: SupportRequest[] = [
@@ -43,7 +43,6 @@ const App: React.FC = () => {
     completedToday: 24
   });
 
-  // Efecto para inicializar Teams SDK
   useEffect(() => {
     const initializeTeams = async () => {
       try {
@@ -65,7 +64,6 @@ const App: React.FC = () => {
     initializeTeams();
   }, []);
 
-  // Lógica de cálculo de posición y tiempos
   const myRequest = requests.find(r => r.userId === currentUserId && (r.status === 'waiting' || r.status === 'in-progress')) || null;
   
   const myQueuePosition = myRequest && myRequest.status === 'waiting' 
