@@ -9,7 +9,7 @@ import { Loader2, CloudCheck, Database, Server } from 'lucide-react';
 
 const AUTHORIZED_AGENTS = [
   'mbozzone@intecsoft.com.ar',
-  'ftokashiki@intecsoft.com.ar'
+  'test@intecsoft.com.ar'
 ];
 
 const App: React.FC = () => {
