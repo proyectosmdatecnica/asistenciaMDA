@@ -1,11 +1,11 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Layout from './components/Layout';
 import AgentDashboard from './components/AgentDashboard';
 import UserRequestView from './components/UserRequestView';
 import { SupportRequest, QueueStats, AppRole } from './types';
 import { storageService } from './services/dataService';
-import { Loader2, Database, Server } from 'lucide-react';
+import { Loader2, Database, Server, Wifi } from 'lucide-react';
 
 const AUTHORIZED_AGENTS = [
   'mbozzone@intecsoft.com.ar',
@@ -20,11 +20,6 @@ const App: React.FC = () => {
   const [isTeamsReady, setIsTeamsReady] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncStatus, setLastSyncStatus] = useState<'online' | 'offline'>('online');
-  const [stats, setStats] = useState<QueueStats>({
-    averageWaitTime: 5,
-    activeRequests: 0,
-    completedToday: 0
-  });
 
   const refreshData = useCallback(async (silent = false) => {
     if (!silent) setIsSyncing(true);
@@ -33,6 +28,7 @@ const App: React.FC = () => {
       setRequests(data);
       setLastSyncStatus('online');
     } catch (e) {
+      console.error("Error de sincronización:", e);
       setLastSyncStatus('offline');
     } finally {
       if (!silent) setIsSyncing(false);
@@ -57,7 +53,7 @@ const App: React.FC = () => {
           }
         }
       } catch (e) {
-        console.warn("Teams SDK context not available");
+        console.warn("Contexto de Teams no disponible, modo navegador activado.");
       } finally {
         setIsTeamsReady(true);
         refreshData();
@@ -67,28 +63,29 @@ const App: React.FC = () => {
   }, [refreshData]);
 
   useEffect(() => {
-    const interval = setInterval(() => refreshData(true), 15000); 
+    // Intervalo de refresco más corto para sensación de tiempo real (10s)
+    const interval = setInterval(() => refreshData(true), 10000); 
     return () => clearInterval(interval);
   }, [refreshData]);
 
-  useEffect(() => {
+  const stats = useMemo<QueueStats>(() => {
     const completed = requests.filter(r => r.status === 'completed');
     const active = requests.filter(r => r.status === 'waiting' || r.status === 'in-progress');
     
-    let avgMins = 5;
+    let avgMins = 5; // Valor base
     if (completed.length > 0) {
       const totalWait = completed.reduce((acc, curr) => {
-        const start = curr.startedAt || curr.createdAt;
-        return acc + (start - curr.createdAt);
+        const end = curr.startedAt || curr.completedAt || Date.now();
+        return acc + (end - curr.createdAt);
       }, 0);
-      avgMins = Math.max(1, Math.round((totalWait / completed.length) / 60000));
+      avgMins = Math.max(2, Math.round((totalWait / completed.length) / 60000));
     }
 
-    setStats({
+    return {
       averageWaitTime: avgMins,
       completedToday: completed.length,
       activeRequests: active.length
-    });
+    };
   }, [requests]);
 
   const handleCreateRequest = useCallback(async (data: Partial<SupportRequest>) => {
@@ -105,44 +102,49 @@ const App: React.FC = () => {
     };
     
     setIsSyncing(true);
+    // Optimistic update
+    setRequests(prev => [newRequest, ...prev]);
+    
     const success = await storageService.saveRequest(newRequest);
-    if (success) {
-      await refreshData(true);
-    } else {
-      alert("Error al conectar con el servidor. El ticket no se guardó permanentemente.");
+    if (!success) {
+      alert("No se pudo guardar el ticket. Por favor, intenta de nuevo.");
+      refreshData();
     }
     setIsSyncing(false);
   }, [currentUserId, currentUserName, refreshData]);
 
   const handleUpdateStatus = useCallback(async (id: string, newStatus: SupportRequest['status']) => {
     setIsSyncing(true);
+    // Optimistic update
+    setRequests(prev => prev.map(r => r.id === id ? { ...r, status: newStatus } : r));
+    
     const success = await storageService.updateRequestStatus(id, newStatus);
-    if (success) {
-      await refreshData(true);
-    } else {
-      console.error("No se pudo actualizar el estado en el servidor.");
+    if (!success) {
+      console.error("Error al actualizar estado en servidor");
+      refreshData();
     }
     setIsSyncing(false);
   }, [refreshData]);
 
   if (!isTeamsReady) {
     return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-[#f5f5f5]">
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50">
         <Loader2 className="animate-spin text-[#5b5fc7] mb-4" size={48} />
-        <p className="text-gray-500 font-bold">Cargando Sistema de Soporte...</p>
+        <p className="text-slate-500 font-bold animate-pulse">Iniciando Microsoft Teams...</p>
       </div>
     );
   }
 
   return (
     <Layout role={role} onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')}>
-      <div className="fixed bottom-6 right-6 z-50">
-        <div className={`flex items-center space-x-2 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-2xl transition-all border bg-white ${
-          lastSyncStatus === 'online' ? 'text-emerald-600 border-emerald-100' : 'text-red-400 border-red-100'
+      {/* Indicador de Conectividad Estilo Teams */}
+      <div className="fixed bottom-6 left-24 z-50">
+        <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider shadow-lg border bg-white/80 backdrop-blur-sm transition-all ${
+          lastSyncStatus === 'online' ? 'text-emerald-600 border-emerald-100' : 'text-rose-500 border-rose-100'
         }`}>
-          {lastSyncStatus === 'online' ? <Server size={14} /> : <Database size={14} />}
-          <span>{lastSyncStatus === 'online' ? 'Servidor: OK' : 'Error de Conexión'}</span>
-          {isSyncing && <Loader2 size={12} className="animate-spin ml-2" />}
+          <div className={`w-1.5 h-1.5 rounded-full ${lastSyncStatus === 'online' ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+          <span>{lastSyncStatus === 'online' ? 'Conexión Directa' : 'Sin Conexión'}</span>
+          {isSyncing && <Loader2 size={10} className="animate-spin ml-1 opacity-50" />}
         </div>
       </div>
 
@@ -151,7 +153,7 @@ const App: React.FC = () => {
       ) : (
         <UserRequestView 
           activeRequest={requests.find(r => r.userId === currentUserId && (r.status === 'waiting' || r.status === 'in-progress')) || null}
-          queuePosition={requests.filter(r => r.status === 'waiting' && r.createdAt <= (requests.find(u => u.userId === currentUserId)?.createdAt || 0)).length}
+          queuePosition={requests.filter(r => r.status === 'waiting' && r.createdAt <= (requests.find(u => u.userId === currentUserId)?.createdAt || Date.now())).length}
           averageWaitTime={stats.averageWaitTime}
           onSubmit={handleCreateRequest}
           onCancel={(id) => handleUpdateStatus(id, 'cancelled')}

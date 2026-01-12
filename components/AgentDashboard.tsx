@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { SupportRequest, QueueStats } from '../types';
-import { Clock, CheckCircle, Play, XCircle, AlertTriangle, User, MessageSquare } from 'lucide-react';
+import { Clock, CheckCircle, Play, XCircle, AlertTriangle, User, MessageSquare, ExternalLink } from 'lucide-react';
 
 interface AgentDashboardProps {
   requests: SupportRequest[];
@@ -17,8 +17,13 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
     return () => clearInterval(timer);
   }, []);
 
+  const openTeamsChat = (email: string) => {
+    // Formato estándar de Deep Link para chat de Teams
+    const teamsChatUrl = `https://teams.microsoft.com/l/chat/0/0?users=${encodeURIComponent(email)}`;
+    window.open(teamsChatUrl, '_blank');
+  };
+
   const waiting = requests.filter(r => r.status === 'waiting').sort((a, b) => {
-    // Ordenar por prioridad primero, luego por tiempo
     const priorityMap = { high: 3, medium: 2, low: 1 };
     if (priorityMap[a.priority] !== priorityMap[b.priority]) {
       return priorityMap[b.priority] - priorityMap[a.priority];
@@ -77,9 +82,6 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
               <MessageSquare className="text-indigo-600" size={22} />
               <span>Sesiones Activas</span>
             </h2>
-            <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-3 py-1 rounded-full">
-              {inProgress.length} Activas
-            </span>
           </div>
           
           <div className="space-y-4">
@@ -102,18 +104,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                     </div>
                     <div className="flex space-x-2">
                       <button 
+                        onClick={() => openTeamsChat(req.userId)}
+                        className="p-3 bg-[#5b5fc7]/10 text-[#5b5fc7] hover:bg-[#5b5fc7] hover:text-white rounded-2xl transition-all"
+                        title="Chat Directo en Teams"
+                      >
+                        <MessageSquare size={20} />
+                      </button>
+                      <button 
                         onClick={() => onUpdateStatus(req.id, 'completed')}
                         className="p-3 bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white rounded-2xl transition-all"
                         title="Finalizar Caso"
                       >
                         <CheckCircle size={20} />
-                      </button>
-                      <button 
-                        onClick={() => onUpdateStatus(req.id, 'cancelled')}
-                        className="p-3 bg-red-50 text-red-600 hover:bg-red-500 hover:text-white rounded-2xl transition-all"
-                        title="Anular"
-                      >
-                        <XCircle size={20} />
                       </button>
                     </div>
                   </div>
@@ -126,7 +128,13 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       <Clock size={12} />
                       <span>En curso: {getElapsedTime(req.startedAt || req.createdAt)}</span>
                     </span>
-                    <span className="text-gray-400">Atención Directa</span>
+                    <button 
+                      onClick={() => openTeamsChat(req.userId)}
+                      className="text-[#5b5fc7] hover:underline flex items-center space-x-1"
+                    >
+                      <ExternalLink size={10} />
+                      <span>Abrir chat de Teams</span>
+                    </button>
                   </div>
                 </div>
               ))
@@ -141,9 +149,6 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
               <Clock className="text-amber-600" size={22} />
               <span>Cola de Espera</span>
             </h2>
-            <span className="bg-amber-100 text-amber-700 text-xs font-bold px-3 py-1 rounded-full">
-              {waiting.length} Pendientes
-            </span>
           </div>
 
           <div className="space-y-4">
@@ -180,12 +185,21 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                         </div>
                       </div>
                     </div>
-                    <button 
-                      onClick={() => onUpdateStatus(req.id, 'in-progress')}
-                      className="bg-[#5b5fc7] text-white text-xs font-black px-6 py-3 rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
-                    >
-                      ATENDER
-                    </button>
+                    <div className="flex space-x-2">
+                      <button 
+                        onClick={() => openTeamsChat(req.userId)}
+                        className="p-3 bg-gray-50 text-gray-400 hover:bg-[#5b5fc7] hover:text-white rounded-2xl transition-all"
+                        title="Contactar por Chat"
+                      >
+                        <MessageSquare size={18} />
+                      </button>
+                      <button 
+                        onClick={() => onUpdateStatus(req.id, 'in-progress')}
+                        className="bg-[#5b5fc7] text-white text-xs font-black px-6 py-3 rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+                      >
+                        ATENDER
+                      </button>
+                    </div>
                   </div>
                   <div className="mt-2 pl-14">
                     <p className="text-sm font-bold text-gray-800 line-clamp-1">{req.subject}</p>
