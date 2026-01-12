@@ -7,11 +7,17 @@ export const storageService = {
   async fetchAllRequests(): Promise<SupportRequest[]> {
     try {
       const response = await fetch(API_ENDPOINT);
-      if (!response.ok) throw new Error('API Offline');
+      if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Server Error: ${response.status} - ${errorText}`);
+      }
       const data = await response.json();
-      return Array.isArray(data) ? data : [];
+      const requests = Array.isArray(data) ? data : [];
+      // Actualizamos caché solo si la respuesta es exitosa
+      localStorage.setItem('teams_support_cache', JSON.stringify(requests));
+      return requests;
     } catch (error) {
-      console.warn("API Error, usando cache local", error);
+      console.warn("Fetch Error:", error);
       const cached = localStorage.getItem('teams_support_cache');
       return cached ? JSON.parse(cached) : [];
     }
@@ -26,14 +32,13 @@ export const storageService = {
       });
       return response.ok;
     } catch (error) {
-      console.error("Save Error", error);
+      console.error("Save Error:", error);
       return false;
     }
   },
 
   async updateRequestStatus(id: string, status: SupportRequest['status']): Promise<boolean> {
     try {
-      // Usamos la ruta limpia /api/requests/ID que ahora reconoce function.json
       const response = await fetch(`${API_ENDPOINT}/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -45,7 +50,7 @@ export const storageService = {
       });
       return response.ok;
     } catch (error) {
-      console.error("Update Error", error);
+      console.error("Update Error:", error);
       return false;
     }
   }

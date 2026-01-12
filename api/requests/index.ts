@@ -1,27 +1,30 @@
 
-import { HttpRequest, InvocationContext, HttpResponseInit } from "@azure/functions";
+import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import * as sql from "mssql";
 
-const sqlConfig = process.env.SqlConnectionString;
+const sqlConfigString = process.env.SqlConnectionString;
 
-// Fix: Swapped parameters to match Azure Functions v4 signature (req, context)
-// Fix: Use InvocationContext and HttpResponseInit instead of Context and void
-const httpTrigger = async function (req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    context.log('Procesando solicitud de soporte...');
+/**
+ * HTTP Trigger handler for support requests. 
+ * Migrated to Azure Functions v4 to resolve type mismatch errors (AzureFunction and Context not exported).
+ */
+export async function requestsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    context.log('HTTP trigger function processed a request.');
 
-    if (!sqlConfig) {
-        return {
-            status: 500,
-            body: "Error de configuración: SqlConnectionString no encontrada en las variables de entorno de Azure."
+    if (!sqlConfigString) {
+        return { 
+            status: 500, 
+            body: "Error: La variable SqlConnectionString no está configurada en Azure." 
         };
     }
 
     let pool;
     try {
-        pool = await sql.connect(sqlConfig);
+        // Fix: Use the connection string directly as mssql.connect expects a string or a structured config object.
+        // The previous structured object was missing required properties like 'server'.
+        pool = await sql.connect(sqlConfigString);
         const method = req.method.toLowerCase();
-        
-        // Fix: In v4, route parameters are accessed via req.params instead of context.bindingData
+        // In v4, route parameters are accessed via req.params instead of context.bindingData
         const id = req.params.id;
 
         if (method === "get") {
@@ -29,16 +32,12 @@ const httpTrigger = async function (req: HttpRequest, context: InvocationContext
             return {
                 status: 200,
                 headers: { "Content-Type": "application/json" },
-                jsonBody: result.recordset
+                body: JSON.stringify(result.recordset)
             };
         } 
         else if (method === "post") {
-            // Fix: req.body is a ReadableStream in v4; use await req.json() to parse the payload
-            const r = await req.json() as any;
-            if (!r || !r.id) {
-                return { status: 400, body: "Cuerpo de solicitud inválido" };
-            }
-            
+            // Fix: req.body in v4 is a ReadableStream. Use req.json() to parse it to avoid "Property does not exist" errors.
+            const r: any = await req.json();
             await pool.request()
                 .input('id', sql.VarChar, r.id)
                 .input('userId', sql.VarChar, r.userId)
@@ -51,15 +50,14 @@ const httpTrigger = async function (req: HttpRequest, context: InvocationContext
                 .input('aiSummary', sql.Text, r.aiSummary || '')
                 .query(`INSERT INTO requests (id, userId, userName, subject, description, status, createdAt, priority, aiSummary) 
                         VALUES (@id, @userId, @userName, @subject, @description, @status, @createdAt, @priority, @aiSummary)`);
-            
-            return { status: 201, jsonBody: { success: true } };
+            return { status: 201, body: JSON.stringify({ success: true }) };
         }
         else if (method === "patch") {
             if (!id) {
-                return { status: 400, body: "ID de ticket requerido para actualización" };
+                return { status: 400, body: "ID de ticket faltante en la ruta." };
             }
-            // Fix: req.body is a ReadableStream in v4; use await req.json() to parse the payload
-            const body = await req.json() as any;
+            // Fix: req.body in v4 is a ReadableStream. Use req.json() to parse it.
+            const body: any = await req.json();
             const { status, startedAt, completedAt } = body;
             await pool.request()
                 .input('id', sql.VarChar, id)
@@ -71,24 +69,26 @@ const httpTrigger = async function (req: HttpRequest, context: InvocationContext
                         startedAt = COALESCE(@startedAt, startedAt), 
                         completedAt = COALESCE(@completedAt, completedAt) 
                         WHERE id = @id`);
-            
-            return { status: 200, jsonBody: { success: true } };
+            return { status: 200, body: JSON.stringify({ success: true }) };
         }
-        else {
-            return { status: 405, body: "Método no permitido" };
-        }
-    } catch (err) {
-        // Fix: Use context.error instead of context.log.error in v4
-        context.error("Error en la base de datos:", err);
+        
+        return { status: 405, body: "Method Not Allowed" };
+    } catch (err: any) {
+        // Fix: In v4 InvocationContext, use context.error instead of context.log.error
+        context.error("Error detallado:", err);
         return { 
             status: 500, 
-            body: `Error interno: ${err instanceof Error ? err.message : 'Error desconocido'}` 
+            body: `Error de Base de Datos: ${err.message}. Verifica que la tabla 'requests' exista y los permisos de red.` 
         };
     } finally {
-        if (pool) {
-            await pool.close();
-        }
+        if (pool) await pool.close();
     }
-};
+}
 
-export default httpTrigger;
+// Explicitly register the function with the Azure Functions v4 app object
+app.http('requests', {
+    methods: ['GET', 'POST', 'PATCH'],
+    authLevel: 'anonymous',
+    route: 'requests/{id?}',
+    handler: requestsHandler
+});
