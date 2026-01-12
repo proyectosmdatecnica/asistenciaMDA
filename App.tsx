@@ -9,8 +9,8 @@ import { Loader2 } from 'lucide-react';
 // === CONFIGURACIÓN DE AGENTES ===
 // Añade aquí los correos de las personas que atenderán los pedidos
 const AUTHORIZED_AGENTS = [
-  'soporte@tuempresa.com',
-  'admin@tuempresa.com',
+  'mbozzone@intecsoft.com.ar',
+  'ftokashiki@intecsoft.com.ar',
   'tu-correo@ejemplo.com' // Reemplaza con tu correo de Teams para probar
 ];
 
