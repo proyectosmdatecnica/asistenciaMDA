@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import Layout from './components/Layout.tsx';
-import AgentDashboard from './components/AgentDashboard.tsx';
-import UserRequestView from './components/UserRequestView.tsx';
-import { SupportRequest, QueueStats, AppRole } from './types.ts';
+import Layout from './components/Layout';
+import AgentDashboard from './components/AgentDashboard';
+import UserRequestView from './components/UserRequestView';
+import { SupportRequest, QueueStats, AppRole } from './types';
 import { Loader2 } from 'lucide-react';
 
 const INITIAL_REQUESTS: SupportRequest[] = [
