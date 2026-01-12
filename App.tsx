@@ -8,7 +8,7 @@ import { Loader2 } from 'lucide-react';
 // === CONFIGURACIÓN DE AGENTES ===
 const AUTHORIZED_AGENTS = [
   'mbozzone@intecsoft.com.ar',
-  'ftokashiki@intecsoft.com.ar'
+  'test@intecsoft.com.ar'
 ];
 
 const App: React.FC = () => {
