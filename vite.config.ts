@@ -4,7 +4,8 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   define: {
-    'process.env': {} // Evita errores de variables de entorno no definidas en el navegador
+    // Esto es crucial para que process.env.API_KEY no rompa la app en el navegador
+    'process.env': {}
   },
   build: {
     outDir: 'dist',
@@ -13,12 +14,6 @@ export default defineConfig({
       input: {
         main: './index.html',
       },
-    },
-  },
-  resolve: {
-    alias: {
-      // Asegura que las rutas relativas se resuelvan correctamente
-      '@': '/',
     },
   },
 });
