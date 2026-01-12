@@ -1,9 +1,6 @@
 
 import { SupportRequest } from '../types';
 
-/**
- * SERVICIO DE DATOS PARA AZURE FUNCTIONS (API GRATUITA)
- */
 const API_ENDPOINT = '/api/requests';
 
 export const storageService = {
@@ -14,6 +11,7 @@ export const storageService = {
       const data = await response.json();
       return Array.isArray(data) ? data : [];
     } catch (error) {
+      console.warn("API Error, usando cache local", error);
       const cached = localStorage.getItem('teams_support_cache');
       return cached ? JSON.parse(cached) : [];
     }
@@ -28,15 +26,15 @@ export const storageService = {
       });
       return response.ok;
     } catch (error) {
+      console.error("Save Error", error);
       return false;
     }
   },
 
   async updateRequestStatus(id: string, status: SupportRequest['status']): Promise<boolean> {
     try {
-      // Enviamos el ID en el cuerpo o como query param según prefieras
-      // Aquí lo enviamos al endpoint base y la función lo maneja
-      const response = await fetch(`${API_ENDPOINT}?id=${id}`, {
+      // Usamos la ruta limpia /api/requests/ID que ahora reconoce function.json
+      const response = await fetch(`${API_ENDPOINT}/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -47,6 +45,7 @@ export const storageService = {
       });
       return response.ok;
     } catch (error) {
+      console.error("Update Error", error);
       return false;
     }
   }
