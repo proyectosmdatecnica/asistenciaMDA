@@ -11,15 +11,12 @@
     "strict": true,
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
-    "moduleResolution": "Node",
+    "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-alpha",
-    "baseUrl": ".",
-    "paths": {
-      "*": ["*"]
-    }
+    "jsx": "react-jsx",
+    "baseUrl": "."
   },
   "include": ["."],
   "exclude": ["node_modules", "dist"]
