@@ -12,9 +12,10 @@ interface LayoutProps {
   children: React.ReactNode;
   role: 'user' | 'agent';
   onSwitchRole: () => void;
+  onOpenHelp: () => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, role, onSwitchRole }) => {
+const Layout: React.FC<LayoutProps> = ({ children, role, onSwitchRole, onOpenHelp }) => {
   return (
     <div className="flex h-screen w-full bg-[#f5f5f5] font-sans">
       {/* Barra lateral estilo Teams */}
@@ -39,9 +40,12 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onSwitchRole }) => {
           <span className="text-[8px] block text-center mt-1 opacity-50 uppercase font-bold">Debug</span>
         </div>
 
-        <div className="p-2 hover:bg-[#44455e] rounded cursor-pointer transition-colors">
+        <div 
+          className="p-2 hover:bg-[#44455e] rounded cursor-pointer transition-colors text-amber-400"
+          onClick={onOpenHelp}
+        >
           <HelpCircle size={24} />
-          <span className="text-[10px] block text-center mt-1">Ayuda</span>
+          <span className="text-[10px] block text-center mt-1 text-gray-300">Ayuda</span>
         </div>
       </div>
 

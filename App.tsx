@@ -1,8 +1,8 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Layout from './components/Layout';
 import AgentDashboard from './components/AgentDashboard';
 import UserRequestView from './components/UserRequestView';
+import HelpModal from './components/HelpModal';
 import { SupportRequest, QueueStats, AppRole } from './types';
 import { storageService } from './services/dataService';
 import { Loader2, RefreshCw, Wifi, WifiOff, Activity } from 'lucide-react';
@@ -21,6 +21,7 @@ const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncStatus, setLastSyncStatus] = useState<'online' | 'offline'>('online');
   const [countdown, setCountdown] = useState(15);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   
   const prevWaitingCount = useRef(0);
 
@@ -29,16 +30,15 @@ const App: React.FC = () => {
     try {
       const data = await storageService.fetchAllRequests();
       
-      // Notificación sonora si entra alguien nuevo a la cola (solo para agentes)
       if (role === 'agent') {
         const currentWaiting = data.filter(r => r.status === 'waiting').length;
         if (currentWaiting > prevWaitingCount.current) {
           try {
             const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
             audio.volume = 0.4;
-            audio.play().catch(() => console.log("Audio play blocked by browser policy"));
+            audio.play().catch(() => console.log("Audio play blocked"));
           } catch (e) {
-            console.warn("Could not play notification sound", e);
+            console.warn("Notification sound error", e);
           }
         }
         prevWaitingCount.current = currentWaiting;
@@ -82,7 +82,6 @@ const App: React.FC = () => {
     init();
   }, [refreshData]);
 
-  // Auto-refresh logic
   useEffect(() => {
     const interval = setInterval(() => {
       setCountdown(prev => {
@@ -104,7 +103,7 @@ const App: React.FC = () => {
     if (completed.length > 0) {
       const totalWait = completed.reduce((acc, curr) => {
         const end = curr.startedAt || curr.completedAt || Date.now();
-        return acc + (end - curr.createdAt);
+        return acc + (Number(end) - Number(curr.createdAt));
       }, 0);
       avgMins = Math.max(2, Math.round((totalWait / completed.length) / 60000));
     }
@@ -155,7 +154,7 @@ const App: React.FC = () => {
     if (!activeRequestForUser || activeRequestForUser.status !== 'waiting') return 0;
     const waitingList = requests
       .filter(r => r.status === 'waiting')
-      .sort((a, b) => a.createdAt - b.createdAt);
+      .sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
     return waitingList.findIndex(r => r.id === activeRequestForUser.id) + 1;
   }, [requests, activeRequestForUser]);
 
@@ -171,9 +170,12 @@ const App: React.FC = () => {
   }
 
   return (
-    <Layout role={role} onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')}>
+    <Layout 
+      role={role} 
+      onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')}
+      onOpenHelp={() => setIsHelpOpen(true)}
+    >
       <div className="relative min-h-full pb-20">
-        {/* Connection Status Bar */}
         <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-3 bg-white px-5 py-3 rounded-full shadow-2xl border border-gray-100 text-[11px] font-black group transition-all hover:pr-8">
           <div className="relative">
             {lastSyncStatus === 'online' ? (
@@ -192,7 +194,6 @@ const App: React.FC = () => {
             <button 
               onClick={() => refreshData()} 
               className="p-1.5 hover:bg-gray-100 rounded-full transition-all active:rotate-180 duration-500"
-              title="Sincronizar ahora"
             >
               <RefreshCw size={12} className="text-indigo-400" />
             </button>
@@ -214,6 +215,8 @@ const App: React.FC = () => {
             onCancel={(id) => handleUpdateStatus(id, 'cancelled')}
           />
         )}
+
+        <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
       </div>
     </Layout>
   );

@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { SupportRequest } from '../types';
-import { Send, Loader2, Clock, Info, UserCheck, AlertCircle, Timer, Lightbulb } from 'lucide-react';
+import { Send, Loader2, Clock, Info, UserCheck, AlertCircle, Timer, Lightbulb, MessageCircle } from 'lucide-react';
 import { triageRequest } from '../services/geminiService';
 
 interface UserRequestViewProps {
@@ -93,6 +92,17 @@ const UserRequestView: React.FC<UserRequestViewProps> = ({ activeRequest, queueP
               </div>
             </div>
 
+            {/* Aviso de Contacto Teams */}
+            <div className="bg-indigo-600 text-white p-5 rounded-3xl shadow-xl shadow-indigo-100 mb-8 flex items-center space-x-4 animate-bounce-short">
+              <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center">
+                <MessageCircle size={20} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Aviso Importante</p>
+                <p className="text-xs font-bold">Un agente te contactará por chat de Teams a la brevedad.</p>
+              </div>
+            </div>
+
             {/* Timeline Lineal */}
             <div className="relative flex items-center justify-between px-6 mb-10">
               <div className="absolute top-1/2 left-0 w-full h-0.5 bg-gray-100 -translate-y-1/2 z-0" />
@@ -137,16 +147,9 @@ const UserRequestView: React.FC<UserRequestViewProps> = ({ activeRequest, queueP
               </div>
             )}
 
-            <div className="bg-[#5b5fc7]/5 p-6 rounded-2xl border border-[#5b5fc7]/10 mb-6">
-              <div className="flex items-center space-x-2 mb-2">
-                <Info size={14} className="text-[#5b5fc7]" />
-                <span className="text-[10px] font-black text-[#5b5fc7] uppercase tracking-widest">¿Qué sucede ahora?</span>
-              </div>
-              <p className="text-[11px] text-[#5b5fc7] leading-relaxed font-bold">
-                {isWaiting 
-                  ? "Nuestra IA ha priorizado tu caso. En cuanto el agente esté disponible, iniciará la comunicación directamente contigo en Teams."
-                  : "El equipo de soporte está revisando los detalles que proporcionaste. Te contactarán por chat en breves instantes."
-                }
+            <div className="bg-[#5b5fc7]/5 p-6 rounded-2xl border border-[#5b5fc7]/10 mb-6 text-center">
+              <p className="text-[11px] text-[#5b5fc7] leading-relaxed font-black uppercase tracking-tighter">
+                Mantén esta pestaña abierta para seguir tu progreso
               </p>
             </div>
 
@@ -213,7 +216,10 @@ const UserRequestView: React.FC<UserRequestViewProps> = ({ activeRequest, queueP
               </>
             )}
           </button>
-          <p className="text-[9px] text-center text-gray-400 uppercase font-bold tracking-widest">Tu solicitud será triada automáticamente por Inteligencia Artificial</p>
+          <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100/50 flex items-center space-x-3">
+            <MessageCircle size={16} className="text-[#5b5fc7]" />
+            <p className="text-[9px] text-indigo-700 uppercase font-black tracking-widest leading-none">Recuerda: Te contactaremos por Chat de Teams</p>
+          </div>
         </div>
       </form>
     </div>

@@ -42,8 +42,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
     setExpandedTickets(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const openTeamsChat = (userId: string) => {
-    const teamsUrl = `https://teams.microsoft.com/l/chat/0/0?users=${userId}`;
+  const openTeamsChat = (userId: string, ticketId: string) => {
+    const message = encodeURIComponent(`Hola! Te contacto por el Ticket numero ${ticketId}`);
+    const teamsUrl = `https://teams.microsoft.com/l/chat/0/0?users=${userId}&message=${message}`;
     window.open(teamsUrl, '_blank');
   };
 
@@ -90,8 +91,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
       r.status,
       r.category || 'General',
       r.priority,
-      new Date(r.createdAt).toLocaleString(),
-      r.completedAt ? new Date(r.completedAt).toLocaleString() : '-'
+      new Date(Number(r.createdAt)).toLocaleString(),
+      r.completedAt ? new Date(Number(r.completedAt)).toLocaleString() : '-'
     ]);
 
     const csvContent = "\uFEFF" + [headers, ...rows].map(e => e.join(",")).join("\n");
@@ -280,7 +281,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                     </span>
                   </div>
                   <button 
-                    onClick={() => openTeamsChat(req.userId)}
+                    onClick={() => openTeamsChat(req.userId, req.id)}
                     className="flex items-center space-x-2 text-[10px] font-black text-[#5b5fc7] hover:bg-[#5b5fc7] hover:text-white px-4 py-2 rounded-xl transition-all uppercase tracking-widest border border-[#5b5fc7]/20"
                   >
                     <MessageCircle size={14} />
@@ -343,7 +344,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                   </div>
                 )}
                 <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between">
-                   <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Recibido {new Date(req.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                   <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Recibido {new Date(Number(req.createdAt)).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                    <button 
                     onClick={() => toggleExpand(req.id)}
                     className="text-[9px] font-black text-indigo-400 hover:text-indigo-600 transition-colors uppercase tracking-widest"
@@ -404,8 +405,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       </div>
                     </td>
                     <td className="p-6">
-                      <p className="text-gray-900 font-black">{req.completedAt ? new Date(req.completedAt).toLocaleTimeString() : '-'}</p>
-                      <p className="text-[10px] text-gray-400 font-bold">{req.completedAt ? new Date(req.completedAt).toLocaleDateString() : ''}</p>
+                      <p className="text-gray-900 font-black">{req.completedAt ? new Date(Number(req.completedAt)).toLocaleTimeString() : '-'}</p>
+                      <p className="text-[10px] text-gray-400 font-bold">{req.completedAt ? new Date(Number(req.completedAt)).toLocaleDateString() : ''}</p>
                     </td>
                   </tr>
                 ))}
