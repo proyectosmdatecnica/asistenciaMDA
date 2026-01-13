@@ -7,7 +7,12 @@
   },
   "routes": [
     {
-      "route": "/api/*",
+      "route": "/api/requests/{id}",
+      "methods": ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+      "allowedRoles": ["anonymous", "authenticated"]
+    },
+    {
+      "route": "/api/requests",
       "methods": ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
       "allowedRoles": ["anonymous", "authenticated"]
     }
