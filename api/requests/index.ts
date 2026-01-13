@@ -1,1 +1,1 @@
-// ELIMINAR ESTA CARPETA MANUALMENTE
+// Archivo deprecado. La lógica ahora reside en api/index.ts (V4 model)

@@ -1,33 +1,35 @@
-
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import * as sql from "mssql";
 
 const sqlConfigString = process.env.SqlConnectionString;
+let pool: sql.ConnectionPool | null = null;
+
+async function getPool(context: InvocationContext) {
+    if (pool && pool.connected) {
+        return pool;
+    }
+    if (!sqlConfigString) {
+        throw new Error("SqlConnectionString no definida.");
+    }
+    context.log("Iniciando nueva conexión al pool de SQL...");
+    pool = await new sql.ConnectionPool(sqlConfigString).connect();
+    return pool;
+}
 
 export async function requestsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    context.log(`HTTP ${req.method} request received for /api/requests`);
-
-    if (!sqlConfigString) {
-        context.error("SqlConnectionString is not defined in environment variables.");
-        return { status: 500, body: "Server Configuration Error" };
-    }
-
-    let pool;
     try {
-        pool = await sql.connect(sqlConfigString);
+        const pool = await getPool(context);
         const method = req.method.toLowerCase();
         const id = req.params.id;
 
         if (method === "get") {
             const result = await pool.request().query("SELECT * FROM requests ORDER BY createdAt DESC");
-            return {
-                status: 200,
-                jsonBody: result.recordset
-            };
+            return { status: 200, jsonBody: result.recordset };
         } 
-        else if (method === "post") {
+        
+        if (method === "post") {
             const r: any = await req.json();
-            if (!r || !r.id) return { status: 400, body: "Invalid request body." };
+            if (!r || !r.id) return { status: 400, body: "Datos de ticket inválidos." };
 
             await pool.request()
                 .input('id', sql.VarChar, r.id)
@@ -45,8 +47,9 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
             
             return { status: 201, jsonBody: { success: true } };
         }
-        else if (method === "patch") {
-            if (!id) return { status: 400, body: "Request ID is required for updates." };
+
+        if (method === "patch") {
+            if (!id) return { status: 400, body: "ID requerido." };
             const body: any = await req.json();
             
             await pool.request()
@@ -62,16 +65,11 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
             
             return { status: 200, jsonBody: { success: true } };
         }
-        
-        return { status: 405, body: "Method Not Allowed" };
+
+        return { status: 405, body: "Método no soportado" };
     } catch (err: any) {
-        context.error(`API Error: ${err.message}`);
-        return { 
-            status: 500, 
-            body: `Internal Server Error: ${err.message}` 
-        };
-    } finally {
-        if (pool) await pool.close();
+        context.error(`Error en API requestsHandler: ${err.message}`);
+        return { status: 500, body: `Error Interno: ${err.message}` };
     }
 }
 
