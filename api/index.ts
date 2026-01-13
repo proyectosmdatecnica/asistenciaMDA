@@ -10,9 +10,9 @@ let pool: any = null;
 async function getPool(context: InvocationContext) {
     if (pool && pool.connected) return pool;
     if (!sqlConfigString) {
-        throw new Error("SqlConnectionString no configurada.");
+        throw new Error("SqlConnectionString no configurada en las variables de entorno de Azure.");
     }
-    context.log("Conectando a SQL...");
+    context.log("Iniciando conexión a base de datos...");
     pool = await new sql.ConnectionPool(sqlConfigString).connect();
     return pool;
 }
@@ -32,15 +32,14 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
         if (method === "post") {
             const r: any = await req.json();
             
-            // Triaje simplificado si no hay API_KEY para evitar errores 500 innecesarios
             let triage = { priority: 'medium', summary: r.subject, category: 'General' };
             
-            if (API_KEY) {
+            if (API_KEY && API_KEY !== "undefined") {
                 try {
                     const ai = new GoogleGenAI({ apiKey: API_KEY });
                     const response = await ai.models.generateContent({
                         model: "gemini-3-flash-preview",
-                        contents: `Analiza: ${r.subject}. ${r.description || ''}`,
+                        contents: `Analiza este ticket de IT. Asunto: ${r.subject}. Descripción: ${r.description || ''}`,
                         config: {
                             responseMimeType: "application/json",
                             responseSchema: {
@@ -56,12 +55,12 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                     });
                     triage = JSON.parse(response.text);
                 } catch (aiErr) {
-                    context.warn("Fallo triaje IA, usando valores por defecto.");
+                    context.warn("IA no disponible temporalmente.");
                 }
             }
 
             await poolConnection.request()
-                .input('id', sql.VarChar, r.id || `T-${Math.floor(Math.random()*9000)}`)
+                .input('id', sql.VarChar, r.id || `T-${Math.floor(1000 + Math.random()*8999)}`)
                 .input('userId', sql.VarChar, r.userId)
                 .input('userName', sql.VarChar, r.userName)
                 .input('subject', sql.VarChar, r.subject)
@@ -83,21 +82,27 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                 .input('id', sql.VarChar, id)
                 .input('status', sql.VarChar, body.status)
                 .input('now', sql.BigInt, Date.now())
-                .query(`UPDATE requests SET status = @status, 
-                        startedAt = CASE WHEN @status = 'in-progress' AND startedAt IS NULL THEN @now ELSE startedAt END, 
-                        completedAt = CASE WHEN @status = 'completed' THEN @now ELSE completedAt END 
+                .query(`UPDATE requests SET 
+                        status = @status, 
+                        startedAt = CASE 
+                            WHEN @status = 'in-progress' AND startedAt IS NULL THEN @now 
+                            WHEN @status = 'waiting' THEN NULL 
+                            ELSE startedAt END, 
+                        completedAt = CASE 
+                            WHEN @status = 'completed' OR @status = 'cancelled' THEN @now 
+                            WHEN @status = 'waiting' OR @status = 'in-progress' THEN NULL
+                            ELSE completedAt END 
                         WHERE id = @id`);
             return { status: 200, jsonBody: { success: true } };
         }
 
-        return { status: 405, body: "Metodo no permitido" };
+        return { status: 405, body: "Método no soportado" };
     } catch (err: any) {
-        context.error(`Error: ${err.message}`);
+        context.error(`Error en la API: ${err.message}`);
         return { status: 500, jsonBody: { error: err.message } };
     }
 }
 
-// Registro explícito de la función
 app.http('requests', {
     methods: ['GET', 'POST', 'PATCH'],
     authLevel: 'anonymous',
