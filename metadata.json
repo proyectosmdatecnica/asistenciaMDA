@@ -1,0 +1,5 @@
+{
+  "name": "Teams Support Queue",
+  "description": "A collaborative support queue management system designed for Microsoft Teams. Allows users to request assistance and agents to manage the queue with AI-powered triage.",
+  "requestFramePermissions": []
+}
