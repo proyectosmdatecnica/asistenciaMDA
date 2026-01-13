@@ -28,8 +28,10 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
           app_location: "/" 
-          api_location: "api"  # Ahora Azure buscará funciones aquí
-          output_location: "dist" 
+          api_location: "api"
+          output_location: "dist"
+        env:
+          NODE_VERSION: 20.x
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
