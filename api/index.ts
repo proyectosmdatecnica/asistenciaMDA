@@ -2,7 +2,7 @@ import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/fu
 import * as sql from "mssql";
 
 const sqlConfigString = process.env.SqlConnectionString;
-let pool: sql.ConnectionPool | null = null;
+let pool: any = null;
 
 async function getPool(context: InvocationContext) {
     if (pool && pool.connected) {
@@ -22,10 +22,10 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
     const id = req.params.id;
 
     try {
-        const pool = await getPool(context);
+        const poolConnection = await getPool(context);
 
         if (method === "get") {
-            const result = await pool.request().query("SELECT * FROM requests ORDER BY createdAt DESC");
+            const result = await poolConnection.request().query("SELECT * FROM requests ORDER BY createdAt DESC");
             return { status: 200, jsonBody: result.recordset };
         } 
         
@@ -33,7 +33,7 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
             const r: any = await req.json();
             if (!r || !r.id) return { status: 400, body: "ID de ticket faltante." };
 
-            await pool.request()
+            await poolConnection.request()
                 .input('id', sql.VarChar, r.id)
                 .input('userId', sql.VarChar, r.userId)
                 .input('userName', sql.VarChar, r.userName)
@@ -55,7 +55,7 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
             const body: any = await req.json();
             const now = Date.now();
             
-            await pool.request()
+            await poolConnection.request()
                 .input('id', sql.VarChar, id)
                 .input('status', sql.VarChar, body.status)
                 .input('now', sql.BigInt, now)
