@@ -5,16 +5,26 @@ import { GoogleGenAI, Type } from "@google/genai";
 const sqlConfigString = process.env.SqlConnectionString;
 const API_KEY = process.env.API_KEY;
 
-let pool: any = null;
+let pool: sql.ConnectionPool | null = null;
 
 async function getPool(context: InvocationContext) {
-    if (pool && pool.connected) return pool;
-    if (!sqlConfigString) {
-        throw new Error("SqlConnectionString no configurada en las variables de entorno de Azure.");
+    try {
+        if (pool && pool.connected) return pool;
+        
+        if (!sqlConfigString) {
+            context.error("ERROR: SqlConnectionString no encontrada en Configuration.");
+            throw new Error("Missing SqlConnectionString");
+        }
+        
+        context.log("Intentando conectar a SQL Server...");
+        pool = await new sql.ConnectionPool(sqlConfigString).connect();
+        context.log("Conexión SQL exitosa.");
+        return pool;
+    } catch (err: any) {
+        context.error("Error crítico de conexión SQL:", err.message);
+        pool = null;
+        throw err;
     }
-    context.log("Iniciando conexión a base de datos...");
-    pool = await new sql.ConnectionPool(sqlConfigString).connect();
-    return pool;
 }
 
 export async function requestsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
@@ -31,7 +41,6 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
         
         if (method === "post") {
             const r: any = await req.json();
-            
             let triage = { priority: 'medium', summary: r.subject, category: 'General' };
             
             if (API_KEY && API_KEY !== "undefined") {
@@ -39,7 +48,7 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                     const ai = new GoogleGenAI({ apiKey: API_KEY });
                     const response = await ai.models.generateContent({
                         model: "gemini-3-flash-preview",
-                        contents: `Analiza este ticket de IT. Asunto: ${r.subject}. Descripción: ${r.description || ''}`,
+                        contents: `Analiza ticket IT: ${r.subject}. ${r.description || ''}`,
                         config: {
                             responseMimeType: "application/json",
                             responseSchema: {
@@ -55,7 +64,7 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                     });
                     triage = JSON.parse(response.text);
                 } catch (aiErr) {
-                    context.warn("IA no disponible temporalmente.");
+                    context.warn("Fallo triaje IA, continuando con datos básicos.");
                 }
             }
 
@@ -82,24 +91,24 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                 .input('id', sql.VarChar, id)
                 .input('status', sql.VarChar, body.status)
                 .input('now', sql.BigInt, Date.now())
-                .query(`UPDATE requests SET 
-                        status = @status, 
-                        startedAt = CASE 
-                            WHEN @status = 'in-progress' AND startedAt IS NULL THEN @now 
-                            WHEN @status = 'waiting' THEN NULL 
-                            ELSE startedAt END, 
-                        completedAt = CASE 
-                            WHEN @status = 'completed' OR @status = 'cancelled' THEN @now 
-                            WHEN @status = 'waiting' OR @status = 'in-progress' THEN NULL
-                            ELSE completedAt END 
+                .query(`UPDATE requests SET status = @status, 
+                        startedAt = CASE WHEN @status = 'in-progress' AND startedAt IS NULL THEN @now WHEN @status = 'waiting' THEN NULL ELSE startedAt END, 
+                        completedAt = CASE WHEN @status IN ('completed', 'cancelled') THEN @now WHEN @status IN ('waiting', 'in-progress') THEN NULL ELSE completedAt END 
                         WHERE id = @id`);
             return { status: 200, jsonBody: { success: true } };
         }
 
-        return { status: 405, body: "Método no soportado" };
+        return { status: 405, body: "Método no permitido" };
     } catch (err: any) {
-        context.error(`Error en la API: ${err.message}`);
-        return { status: 500, jsonBody: { error: err.message } };
+        context.error(`Error en ejecución: ${err.message}`);
+        return { 
+            status: 500, 
+            jsonBody: { 
+                error: "Error interno del servidor", 
+                detail: err.message,
+                hint: "Verifica que la base de datos acepte conexiones y que el ConnectionString sea correcto." 
+            } 
+        };
     }
 }
 

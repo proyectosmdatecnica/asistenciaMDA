@@ -7,13 +7,14 @@ export const storageService = {
     try {
       const response = await fetch(API_ENDPOINT);
       if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || `Server Error: ${response.status}`);
+          const errData = await response.json().catch(() => ({ error: 'Error de red o servidor 503/500' }));
+          console.error("API Fetch Error:", response.status, errData);
+          return [];
       }
       const data = await response.json();
       return Array.isArray(data) ? data : [];
     } catch (error) {
-      console.error("Fetch Error Detail:", error);
+      console.error("Network Exception:", error);
       return [];
     }
   },
@@ -27,14 +28,15 @@ export const storageService = {
       });
       
       if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          console.error("API POST Error detail:", errData);
-          alert(`Error del servidor: ${errData.error || 'Desconocido'}`);
+          const errData = await response.json().catch(() => ({ error: 'Servicio no disponible (503)' }));
+          console.error("API POST Error:", response.status, errData);
+          alert(`Error al enviar: ${errData.detail || errData.error || 'El servidor de base de datos no responde'}`);
           return false;
       }
       return true;
     } catch (error) {
       console.error("Network Error:", error);
+      alert("No se pudo conectar con el servidor. Verifica tu conexión a internet.");
       return false;
     }
   },
@@ -48,6 +50,7 @@ export const storageService = {
       });
       return response.ok;
     } catch (error) {
+      console.error("Update Status Error:", error);
       return false;
     }
   }
