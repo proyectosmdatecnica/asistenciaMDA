@@ -1,6 +1,6 @@
 {
   "name": "api",
-  "version": "1.5.0",
+  "version": "1.7.0",
   "main": "dist/index.js",
   "dependencies": {
     "@azure/functions": "^4.6.0",
@@ -12,6 +12,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "prestart": "npm run build",
     "start": "func start"
   }
 }
