@@ -1,0 +1,9 @@
+
+{
+  "navigationFallback": {
+    "rewrite": "/index.html"
+  },
+  "platform": {
+    "apiLanguageRuntime": "node:20"
+  }
+}

@@ -5,7 +5,7 @@ import AgentDashboard from './components/AgentDashboard';
 import UserRequestView from './components/UserRequestView';
 import { SupportRequest, QueueStats, AppRole } from './types';
 import { storageService } from './services/dataService';
-import { Loader2, RefreshCw, Wifi, WifiOff } from 'lucide-react';
+import { Loader2, RefreshCw, Wifi, WifiOff, Activity } from 'lucide-react';
 
 const AUTHORIZED_AGENTS = [
   'mbozzone@intecsoft.com.ar',
@@ -33,9 +33,13 @@ const App: React.FC = () => {
       if (role === 'agent') {
         const currentWaiting = data.filter(r => r.status === 'waiting').length;
         if (currentWaiting > prevWaitingCount.current) {
-          // Sonido sutil de notificación
-          const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
-          audio.play().catch(() => console.log("Reproducción bloqueada por navegador"));
+          try {
+            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
+            audio.volume = 0.4;
+            audio.play().catch(() => console.log("Audio play blocked by browser policy"));
+          } catch (e) {
+            console.warn("Could not play notification sound", e);
+          }
         }
         prevWaitingCount.current = currentWaiting;
       }
@@ -44,7 +48,7 @@ const App: React.FC = () => {
       setLastSyncStatus('online');
       setCountdown(15);
     } catch (e) {
-      console.error("Error de sincronización:", e);
+      console.error("Sync error:", e);
       setLastSyncStatus('offline');
     } finally {
       if (!silent) setIsSyncing(false);
@@ -69,7 +73,7 @@ const App: React.FC = () => {
           }
         }
       } catch (e) {
-        console.warn("Contexto de Teams no disponible.");
+        console.warn("Teams context not available.");
       } finally {
         setIsTeamsReady(true);
         refreshData();
@@ -78,7 +82,7 @@ const App: React.FC = () => {
     init();
   }, [refreshData]);
 
-  // Auto-refresh cada 15 segundos
+  // Auto-refresh logic
   useEffect(() => {
     const interval = setInterval(() => {
       setCountdown(prev => {
@@ -158,9 +162,9 @@ const App: React.FC = () => {
   if (!isTeamsReady) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-gray-50">
-        <div className="text-center">
+        <div className="text-center animate-pulse">
           <Loader2 className="animate-spin text-[#5b5fc7] mx-auto mb-4" size={40} />
-          <p className="text-gray-500 font-bold">Iniciando Hub de Soporte...</p>
+          <p className="text-gray-500 font-black uppercase tracking-widest text-xs">Cargando Soporte IT...</p>
         </div>
       </div>
     );
@@ -168,20 +172,29 @@ const App: React.FC = () => {
 
   return (
     <Layout role={role} onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')}>
-      <div className="relative">
-        {/* Indicador de Sincronización Flotante */}
-        <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-2 bg-white px-4 py-2 rounded-full shadow-lg border border-gray-100 text-[10px] font-bold">
-          {lastSyncStatus === 'online' ? (
-            <Wifi size={12} className="text-emerald-500" />
-          ) : (
-            <WifiOff size={12} className="text-red-500" />
-          )}
-          <span className="text-gray-400 uppercase tracking-widest">
-            {isSyncing ? 'Sincronizando...' : `Actualiza en ${countdown}s`}
+      <div className="relative min-h-full pb-20">
+        {/* Connection Status Bar */}
+        <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-3 bg-white px-5 py-3 rounded-full shadow-2xl border border-gray-100 text-[11px] font-black group transition-all hover:pr-8">
+          <div className="relative">
+            {lastSyncStatus === 'online' ? (
+              <Wifi size={14} className="text-emerald-500" />
+            ) : (
+              <WifiOff size={14} className="text-red-500" />
+            )}
+            {isSyncing && (
+              <Activity size={10} className="absolute -top-1 -right-1 text-indigo-500 animate-pulse" />
+            )}
+          </div>
+          <span className="text-gray-400 uppercase tracking-[0.15em] whitespace-nowrap">
+            {isSyncing ? 'Sincronizando' : `Refresco en ${countdown}s`}
           </span>
           {!isSyncing && (
-            <button onClick={() => refreshData()} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
-              <RefreshCw size={10} className="text-gray-400" />
+            <button 
+              onClick={() => refreshData()} 
+              className="p-1.5 hover:bg-gray-100 rounded-full transition-all active:rotate-180 duration-500"
+              title="Sincronizar ahora"
+            >
+              <RefreshCw size={12} className="text-indigo-400" />
             </button>
           )}
         </div>

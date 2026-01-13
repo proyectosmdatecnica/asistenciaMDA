@@ -5,10 +5,11 @@ import * as sql from "mssql";
 const sqlConfigString = process.env.SqlConnectionString;
 
 export async function requestsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    context.log(`Método ${req.method} procesado en /api/requests`);
+    context.log(`HTTP ${req.method} request received for /api/requests`);
 
     if (!sqlConfigString) {
-        return { status: 500, body: "Error: Falta SqlConnectionString en Azure." };
+        context.error("SqlConnectionString is not defined in environment variables.");
+        return { status: 500, body: "Server Configuration Error" };
     }
 
     let pool;
@@ -26,7 +27,7 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
         } 
         else if (method === "post") {
             const r: any = await req.json();
-            if (!r || !r.id) return { status: 400, body: "Datos de ticket inválidos." };
+            if (!r || !r.id) return { status: 400, body: "Invalid request body." };
 
             await pool.request()
                 .input('id', sql.VarChar, r.id)
@@ -34,9 +35,9 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                 .input('userName', sql.VarChar, r.userName)
                 .input('subject', sql.VarChar, r.subject)
                 .input('description', sql.Text, r.description)
-                .input('status', sql.VarChar, r.status)
-                .input('createdAt', sql.BigInt, r.createdAt)
-                .input('priority', sql.VarChar, r.priority)
+                .input('status', sql.VarChar, r.status || 'waiting')
+                .input('createdAt', sql.BigInt, r.createdAt || Date.now())
+                .input('priority', sql.VarChar, r.priority || 'medium')
                 .input('aiSummary', sql.Text, r.aiSummary || '')
                 .input('category', sql.VarChar, r.category || 'General')
                 .query(`INSERT INTO requests (id, userId, userName, subject, description, status, createdAt, priority, aiSummary, category) 
@@ -45,7 +46,7 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
             return { status: 201, jsonBody: { success: true } };
         }
         else if (method === "patch") {
-            if (!id) return { status: 400, body: "ID requerido." };
+            if (!id) return { status: 400, body: "Request ID is required for updates." };
             const body: any = await req.json();
             
             await pool.request()
@@ -62,12 +63,12 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
             return { status: 200, jsonBody: { success: true } };
         }
         
-        return { status: 405, body: "Método no permitido" };
+        return { status: 405, body: "Method Not Allowed" };
     } catch (err: any) {
-        context.error("Error en API:", err.message);
+        context.error(`API Error: ${err.message}`);
         return { 
             status: 500, 
-            body: `Error de Servidor: ${err.message}` 
+            body: `Internal Server Error: ${err.message}` 
         };
     } finally {
         if (pool) await pool.close();
