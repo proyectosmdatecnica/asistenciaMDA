@@ -6,15 +6,15 @@ export const storageService = {
   async fetchAllRequests(): Promise<SupportRequest[]> {
     try {
       const response = await fetch(API_ENDPOINT);
-      if (!response.ok) throw new Error(`Server Error: ${response.status}`);
+      if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || `Server Error: ${response.status}`);
+      }
       const data = await response.json();
-      const requests = Array.isArray(data) ? data : [];
-      localStorage.setItem('teams_support_cache', JSON.stringify(requests));
-      return requests;
+      return Array.isArray(data) ? data : [];
     } catch (error) {
-      console.warn("Fetch Error:", error);
-      const cached = localStorage.getItem('teams_support_cache');
-      return cached ? JSON.parse(cached) : [];
+      console.error("Fetch Error Detail:", error);
+      return [];
     }
   },
 
@@ -25,8 +25,16 @@ export const storageService = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request)
       });
-      return response.ok;
+      
+      if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          console.error("API POST Error detail:", errData);
+          alert(`Error del servidor: ${errData.error || 'Desconocido'}`);
+          return false;
+      }
+      return true;
     } catch (error) {
+      console.error("Network Error:", error);
       return false;
     }
   },
