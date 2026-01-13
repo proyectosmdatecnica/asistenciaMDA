@@ -38,8 +38,9 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                 .input('createdAt', sql.BigInt, r.createdAt)
                 .input('priority', sql.VarChar, r.priority)
                 .input('aiSummary', sql.Text, r.aiSummary || '')
-                .query(`INSERT INTO requests (id, userId, userName, subject, description, status, createdAt, priority, aiSummary) 
-                        VALUES (@id, @userId, @userName, @subject, @description, @status, @createdAt, @priority, @aiSummary)`);
+                .input('category', sql.VarChar, r.category || 'General')
+                .query(`INSERT INTO requests (id, userId, userName, subject, description, status, createdAt, priority, aiSummary, category) 
+                        VALUES (@id, @userId, @userName, @subject, @description, @status, @createdAt, @priority, @aiSummary, @category)`);
             
             return { status: 201, jsonBody: { success: true } };
         }

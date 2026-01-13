@@ -8,6 +8,8 @@
     "sourceMap": true,
     "strict": false,
     "esModuleInterop": true,
-    "moduleResolution": "node"
-  }
+    "moduleResolution": "node",
+    "skipLibCheck": true
+  },
+  "exclude": ["node_modules", "dist"]
 }
