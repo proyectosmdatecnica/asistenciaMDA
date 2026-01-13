@@ -9,17 +9,12 @@ async function getPool(context: InvocationContext) {
         return pool;
     }
     if (!sqlConfigString) {
-        context.error("La variable SqlConnectionString no está configurada en la App Settings.");
-        throw new Error("SqlConnectionString no definida.");
+        context.error("Variable SqlConnectionString no configurada.");
+        throw new Error("SqlConnectionString missing.");
     }
-    try {
-        context.log("Iniciando conexión al pool de SQL Server...");
-        pool = await new sql.ConnectionPool(sqlConfigString).connect();
-        return pool;
-    } catch (err: any) {
-        context.error("Error al conectar con SQL Server:", err.message);
-        throw err;
-    }
+    context.log("Conectando a SQL Server...");
+    pool = await new sql.ConnectionPool(sqlConfigString).connect();
+    return pool;
 }
 
 export async function requestsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
@@ -36,7 +31,7 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
         
         if (method === "post") {
             const r: any = await req.json();
-            if (!r || !r.id) return { status: 400, body: "Solicitud inválida: Falta ID de ticket." };
+            if (!r || !r.id) return { status: 400, body: "ID de ticket faltante." };
 
             await pool.request()
                 .input('id', sql.VarChar, r.id)
@@ -52,17 +47,18 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                 .query(`INSERT INTO requests (id, userId, userName, subject, description, status, createdAt, priority, aiSummary, category) 
                         VALUES (@id, @userId, @userName, @subject, @description, @status, @createdAt, @priority, @aiSummary, @category)`);
             
-            return { status: 201, jsonBody: { success: true, id: r.id } };
+            return { status: 201, jsonBody: { success: true } };
         }
 
         if (method === "patch") {
-            if (!id) return { status: 400, body: "ID de ticket requerido para actualización." };
+            if (!id) return { status: 400, body: "ID requerido." };
             const body: any = await req.json();
+            const now = Date.now();
             
             await pool.request()
                 .input('id', sql.VarChar, id)
                 .input('status', sql.VarChar, body.status)
-                .input('now', sql.BigInt, Date.now())
+                .input('now', sql.BigInt, now)
                 .query(`UPDATE requests SET 
                         status = @status, 
                         startedAt = CASE WHEN @status = 'in-progress' AND startedAt IS NULL THEN @now ELSE startedAt END, 
@@ -72,10 +68,10 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
             return { status: 200, jsonBody: { success: true } };
         }
 
-        return { status: 405, body: "Método no permitido" };
+        return { status: 405, body: "Method Not Allowed" };
     } catch (err: any) {
-        context.error(`Error crítico en requestsHandler (${method}):`, err.message);
-        return { status: 500, body: `Error de Servidor: ${err.message}` };
+        context.error(`Error API: ${err.message}`);
+        return { status: 500, body: `Server Error: ${err.message}` };
     }
 }
 
