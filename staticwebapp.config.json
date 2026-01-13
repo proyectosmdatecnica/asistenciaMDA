@@ -1,9 +1,15 @@
-
 {
   "navigationFallback": {
     "rewrite": "/index.html"
   },
   "platform": {
     "apiLanguageRuntime": "node:20"
-  }
+  },
+  "routes": [
+    {
+      "route": "/api/*",
+      "methods": ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+      "allowedRoles": ["anonymous", "authenticated"]
+    }
+  ]
 }
