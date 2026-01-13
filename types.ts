@@ -12,6 +12,7 @@ export interface SupportRequest {
   startedAt?: number;
   completedAt?: number;
   priority: 'low' | 'medium' | 'high';
+  category?: string;
   aiSummary?: string;
 }
 
