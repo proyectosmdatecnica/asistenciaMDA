@@ -1,14 +1,11 @@
-
 import React from 'react';
 import { 
   Users, 
   MessageSquare, 
   Settings, 
   HelpCircle,
-  Bell,
   Search,
-  MoreHorizontal,
-  LogOut
+  MoreHorizontal
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -22,10 +19,6 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onSwitchRole }) => {
     <div className="flex h-screen w-full bg-[#f5f5f5] font-sans">
       {/* Barra lateral estilo Teams */}
       <div className="w-[68px] bg-[#33344a] flex flex-col items-center py-4 space-y-6 text-gray-300 shrink-0">
-        <div className="p-2 hover:bg-[#44455e] rounded cursor-pointer transition-colors group relative">
-          <Bell size={24} />
-          <span className="text-[10px] block text-center mt-1">Actividad</span>
-        </div>
         <div className={`p-2 rounded cursor-pointer transition-all ${role === 'user' ? 'bg-[#5b5fc7] text-white' : 'hover:bg-[#44455e]'}`}>
           <MessageSquare size={24} />
           <span className="text-[10px] block text-center mt-1">Soporte</span>
@@ -37,7 +30,6 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onSwitchRole }) => {
           </div>
         )}
         
-        {/* Botón de Switch - Útil para testing, se puede ocultar después */}
         <div 
           className="mt-auto p-2 hover:bg-[#44455e] rounded cursor-pointer transition-colors border-t border-gray-600 pt-4" 
           onClick={onSwitchRole}
@@ -62,7 +54,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onSwitchRole }) => {
               <div className="w-6 h-6 bg-[#5b5fc7] rounded-md flex items-center justify-center">
                 <MessageSquare size={14} className="text-white" />
               </div>
-              <h1 className="font-bold text-gray-800 text-sm tracking-tight">IT Support Hub</h1>
+              <h1 className="font-bold text-gray-800 text-sm tracking-tight">Asistencia Técnica Hub</h1>
             </div>
             <div className="h-4 w-[1px] bg-gray-300" />
             <div className="flex items-center space-x-2">

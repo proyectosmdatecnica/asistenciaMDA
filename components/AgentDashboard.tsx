@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { SupportRequest, QueueStats } from '../types';
 import { 
@@ -14,7 +13,12 @@ import {
   Download,
   ExternalLink,
   ShieldAlert,
-  Zap
+  Zap,
+  XCircle,
+  RefreshCcw,
+  ChevronDown,
+  ChevronUp,
+  MessageCircle
 } from 'lucide-react';
 
 interface AgentDashboardProps {
@@ -27,11 +31,21 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
   const [now, setNow] = useState(Date.now());
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'queue' | 'history'>('queue');
+  const [expandedTickets, setExpandedTickets] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const toggleExpand = (id: string) => {
+    setExpandedTickets(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const openTeamsChat = (userId: string) => {
+    const teamsUrl = `https://teams.microsoft.com/l/chat/0/0?users=${userId}`;
+    window.open(teamsUrl, '_blank');
+  };
 
   const getCategoryIcon = (cat?: string) => {
     switch(cat) {
@@ -107,7 +121,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
             </div>
           </div>
           <p className="text-3xl font-black text-gray-900">{stats.averageWaitTime}<span className="text-sm font-bold text-gray-400 ml-1">min</span></p>
-          <p className="text-[10px] text-gray-400 font-bold mt-1">Tiempo de espera promedio</p>
+          <p className="text-[10px] text-gray-400 font-bold mt-1">Espera promedio</p>
         </div>
         
         <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
@@ -115,7 +129,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
           <p className="text-3xl font-black text-gray-900">{waiting.length}</p>
           <div className="flex items-center space-x-1 mt-1">
             <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-            <p className="text-[10px] text-gray-400 font-bold">Tickets sin asignar</p>
+            <p className="text-[10px] text-gray-400 font-bold">Sin asignar</p>
           </div>
         </div>
 
@@ -124,7 +138,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
           <p className="text-3xl font-black text-indigo-600">{inProgress.length}</p>
           <div className="flex items-center space-x-1 mt-1">
             <div className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
-            <p className="text-[10px] text-gray-400 font-bold">Atendiendo actualmente</p>
+            <p className="text-[10px] text-gray-400 font-bold">Siendo atendidos</p>
           </div>
         </div>
 
@@ -133,7 +147,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
           <p className="text-3xl font-black text-gray-900">{stats.completedToday}</p>
           <div className="flex items-center space-x-1 mt-1">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-            <p className="text-[10px] text-gray-400 font-bold">Casos finalizados</p>
+            <p className="text-[10px] text-gray-400 font-bold">Tickets finalizados</p>
           </div>
         </div>
       </div>
@@ -158,11 +172,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
         </div>
         
         <div className="flex items-center space-x-3 flex-1 max-w-md">
-          <div className="flex items-center bg-gray-50 rounded-2xl px-5 py-2.5 w-full border border-gray-100 focus-within:bg-white focus-within:border-indigo-300 transition-all focus-within:ring-4 focus-within:ring-indigo-50">
+          <div className="flex items-center bg-gray-50 rounded-2xl px-5 py-2.5 w-full border border-gray-100 focus-within:bg-white focus-within:border-indigo-300 transition-all">
             <Search size={16} className="text-gray-400 mr-3" />
             <input 
               type="text" 
-              placeholder="Filtrar por nombre, asunto o ID..." 
+              placeholder="Filtrar por nombre o ticket..." 
               className="bg-transparent border-none outline-none text-xs w-full font-bold text-gray-700"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -171,8 +185,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
           {activeTab === 'history' && (
             <button 
               onClick={exportToCSV}
-              className="p-3 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-2xl transition-all shadow-indigo-50 shadow-lg active:scale-95"
-              title="Descargar Reporte CSV"
+              className="p-3 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-2xl transition-all"
+              title="Descargar CSV"
             >
               <Download size={20} />
             </button>
@@ -191,10 +205,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
               </h3>
             </div>
             {inProgress.map(req => (
-              <div key={req.id} className="bg-white border-2 border-indigo-100 rounded-[2rem] p-6 shadow-xl shadow-indigo-50/20 transition-all hover:shadow-indigo-100/40 animate-in slide-in-from-left-4">
+              <div key={req.id} className="bg-white border-2 border-indigo-100 rounded-[2rem] p-6 shadow-xl shadow-indigo-50/20 animate-in slide-in-from-left-4">
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white text-lg font-black shadow-lg shadow-indigo-100">
+                    <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white text-lg font-black shadow-lg">
                       {req.userName.charAt(0)}
                     </div>
                     <div>
@@ -202,23 +216,62 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       <p className="text-[10px] text-indigo-500 font-black tracking-widest uppercase mt-0.5">Ticket {req.id}</p>
                     </div>
                   </div>
-                  <button 
-                    onClick={() => onUpdateStatus(req.id, 'completed')}
-                    className="group flex items-center space-x-2 bg-emerald-50 text-emerald-600 px-5 py-2.5 rounded-2xl hover:bg-emerald-600 hover:text-white transition-all font-black text-[10px] active:scale-95"
-                  >
-                    <CheckCircle size={14} className="group-hover:animate-bounce" />
-                    <span>SOLUCIONADO</span>
-                  </button>
+                  <div className="flex flex-col space-y-2">
+                    <button 
+                      onClick={() => onUpdateStatus(req.id, 'completed')}
+                      className="group flex items-center justify-center space-x-2 bg-emerald-50 text-emerald-600 px-4 py-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all font-black text-[9px]"
+                    >
+                      <CheckCircle size={12} />
+                      <span>SOLUCIONADO</span>
+                    </button>
+                    <div className="flex space-x-2">
+                      <button 
+                        onClick={() => onUpdateStatus(req.id, 'cancelled')}
+                        className="flex-1 flex items-center justify-center bg-red-50 text-red-600 p-2 rounded-xl hover:bg-red-600 hover:text-white transition-all"
+                        title="No solucionado"
+                      >
+                        <XCircle size={14} />
+                      </button>
+                      <button 
+                        onClick={() => onUpdateStatus(req.id, 'waiting')}
+                        className="flex-1 flex items-center justify-center bg-amber-50 text-amber-600 p-2 rounded-xl hover:bg-amber-600 hover:text-white transition-all"
+                        title="Volver a cola"
+                      >
+                        <RefreshCcw size={14} />
+                      </button>
+                    </div>
+                  </div>
                 </div>
+                
                 <div className="bg-gray-50/80 p-4 rounded-2xl mb-4 border border-gray-100">
                   <p className="text-xs font-black text-gray-800 leading-tight">{req.subject}</p>
-                  {req.category && (
-                    <span className="inline-flex items-center space-x-1 mt-2 text-[9px] font-black bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-lg">
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="inline-flex items-center space-x-1 text-[9px] font-black bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-lg uppercase">
                       {getCategoryIcon(req.category)}
-                      <span>{req.category.toUpperCase()}</span>
+                      <span>{req.category || 'General'}</span>
                     </span>
+                    <button 
+                      onClick={() => toggleExpand(req.id)}
+                      className="text-[9px] font-black text-gray-400 hover:text-indigo-600 flex items-center space-x-1 uppercase"
+                    >
+                      <span>{expandedTickets[req.id] ? 'Ocultar Detalle' : 'Ver Detalle'}</span>
+                      {expandedTickets[req.id] ? <ChevronUp size={10}/> : <ChevronDown size={10}/>}
+                    </button>
+                  </div>
+                  
+                  {expandedTickets[req.id] && (
+                    <div className="mt-3 pt-3 border-t border-gray-200 text-[11px] text-gray-600 font-medium leading-relaxed animate-in slide-in-from-top-2">
+                      {req.description || "Sin descripción adicional."}
+                      {req.aiSummary && (
+                        <div className="mt-2 p-2 bg-indigo-50/50 rounded-lg text-indigo-700 font-bold border border-indigo-50">
+                          <span className="text-[9px] font-black block uppercase text-indigo-400 mb-0.5">Resumen IA:</span>
+                          {req.aiSummary}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
+
                 <div className="flex items-center justify-between pt-2 border-t border-gray-50">
                   <div className="flex items-center space-x-4">
                     <span className="text-[10px] font-black text-indigo-400 flex items-center space-x-1.5 bg-indigo-50/50 px-3 py-1.5 rounded-xl">
@@ -226,18 +279,19 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       <span>{getElapsedTime(req.startedAt || req.createdAt)}</span>
                     </span>
                   </div>
-                  <button className="flex items-center space-x-2 text-[10px] font-black text-gray-400 hover:text-indigo-600 uppercase tracking-[0.15em] transition-colors">
+                  <button 
+                    onClick={() => openTeamsChat(req.userId)}
+                    className="flex items-center space-x-2 text-[10px] font-black text-[#5b5fc7] hover:bg-[#5b5fc7] hover:text-white px-4 py-2 rounded-xl transition-all uppercase tracking-widest border border-[#5b5fc7]/20"
+                  >
+                    <MessageCircle size={14} />
                     <span>Contactar</span>
-                    <ExternalLink size={14} />
                   </button>
                 </div>
               </div>
             ))}
             {inProgress.length === 0 && (
               <div className="bg-gray-100/50 border-4 border-dotted border-gray-200 rounded-[2.5rem] py-20 text-center">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-300">
-                  <ShieldAlert size={32} />
-                </div>
+                <ShieldAlert size={32} className="mx-auto text-gray-300 mb-4" />
                 <p className="text-gray-400 text-xs font-black uppercase tracking-widest">Sin actividad inmediata</p>
               </div>
             )}
@@ -262,7 +316,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       <h4 className="text-sm font-black text-gray-900 leading-none mb-1">{req.userName}</h4>
                       <div className="flex items-center space-x-2">
                         <span className={`text-[8px] px-2 py-0.5 rounded-md font-black uppercase tracking-widest ${
-                          req.priority === 'high' ? 'bg-red-500 text-white shadow-lg shadow-red-100' : 'bg-gray-100 text-gray-500'
+                          req.priority === 'high' ? 'bg-red-500 text-white shadow-lg' : 'bg-gray-100 text-gray-500'
                         }`}>
                           {req.priority}
                         </span>
@@ -283,22 +337,30 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                 {req.aiSummary && (
                   <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-50">
                     <p className="text-[11px] text-amber-900 leading-snug font-bold">
-                      <span className="text-amber-600 font-black uppercase tracking-tighter mr-2">Resumen:</span>
+                      <span className="text-amber-600 font-black uppercase tracking-tighter mr-2">Triaje:</span>
                       {req.aiSummary}
                     </p>
                   </div>
                 )}
                 <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between">
                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Recibido {new Date(req.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                   <button className="text-[9px] font-black text-indigo-400 hover:text-indigo-600 transition-colors uppercase tracking-widest">Ver Detalles</button>
+                   <button 
+                    onClick={() => toggleExpand(req.id)}
+                    className="text-[9px] font-black text-indigo-400 hover:text-indigo-600 transition-colors uppercase tracking-widest"
+                   >
+                    {expandedTickets[req.id] ? 'Cerrar Detalles' : 'Ver Detalles'}
+                   </button>
                 </div>
+                {expandedTickets[req.id] && (
+                    <div className="mt-3 pt-3 border-t border-gray-100 text-[11px] text-gray-500 italic animate-in slide-in-from-top-2">
+                      {req.description || "El usuario no proporcionó detalles adicionales."}
+                    </div>
+                )}
               </div>
             ))}
             {waiting.length === 0 && (
               <div className="bg-emerald-50/50 border-4 border-dotted border-emerald-100 rounded-[2.5rem] py-20 text-center">
-                <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-500">
-                  <CheckCircle size={32} />
-                </div>
+                <CheckCircle size={32} className="mx-auto text-emerald-500 mb-4" />
                 <p className="text-emerald-600 text-xs font-black uppercase tracking-widest">¡Todo al día!</p>
               </div>
             )}
@@ -336,7 +398,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                         <span className={`w-fit px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest ${
                           req.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
                         }`}>
-                          {req.status === 'completed' ? 'RESUELTO' : 'CANCELADO'}
+                          {req.status === 'completed' ? 'RESUELTO' : 'NO SOLUCIONADO'}
                         </span>
                         <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">{req.category || 'GENERAL'}</span>
                       </div>
