@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Layout from './components/Layout';
 import AgentDashboard from './components/AgentDashboard';
@@ -139,24 +140,29 @@ const App: React.FC = () => {
 
   const handleUpdateStatus = useCallback(async (id: string, newStatus: SupportRequest['status']) => {
     setIsSyncing(true);
-    const success = await storageService.updateRequestStatus(id, newStatus);
+    // Si el estado es 'in-progress', pasamos los datos del agente actual
+    const agentData = newStatus === 'in-progress' ? { 
+      agentId: currentUserId, 
+      agentName: currentUserName 
+    } : {};
+
+    const success = await storageService.updateRequestStatus(id, newStatus, agentData);
     if (success) {
       await refreshData(true);
     }
     setIsSyncing(false);
-  }, [refreshData]);
+  }, [currentUserId, currentUserName, refreshData]);
 
-  const activeRequestForUser = useMemo(() => 
-    requests.find(r => r.userId === currentUserId && (r.status === 'waiting' || r.status === 'in-progress')) || null
+  const activeRequestsForUser = useMemo(() => 
+    requests.filter(r => r.userId === currentUserId && (r.status === 'waiting' || r.status === 'in-progress'))
   , [requests, currentUserId]);
 
-  const queuePosition = useMemo(() => {
-    if (!activeRequestForUser || activeRequestForUser.status !== 'waiting') return 0;
+  const getQueuePosition = useCallback((id: string) => {
     const waitingList = requests
       .filter(r => r.status === 'waiting')
       .sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
-    return waitingList.findIndex(r => r.id === activeRequestForUser.id) + 1;
-  }, [requests, activeRequestForUser]);
+    return waitingList.findIndex(r => r.id === id) + 1;
+  }, [requests]);
 
   if (!isTeamsReady) {
     return (
@@ -208,8 +214,8 @@ const App: React.FC = () => {
           />
         ) : (
           <UserRequestView 
-            activeRequest={activeRequestForUser}
-            queuePosition={queuePosition}
+            activeRequests={activeRequestsForUser}
+            queuePosition={getQueuePosition}
             averageWaitTime={stats.averageWaitTime}
             onSubmit={handleCreateRequest}
             onCancel={(id) => handleUpdateStatus(id, 'cancelled')}
