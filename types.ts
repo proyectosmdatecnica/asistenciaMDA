@@ -14,6 +14,8 @@ export interface SupportRequest {
   priority: 'low' | 'medium' | 'high';
   category?: string;
   aiSummary?: string;
+  agentId?: string;
+  agentName?: string;
 }
 
 export interface QueueStats {

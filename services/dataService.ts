@@ -1,3 +1,4 @@
+
 import { SupportRequest } from '../types';
 
 const API_ENDPOINT = '/api/requests';
@@ -41,12 +42,12 @@ export const storageService = {
     }
   },
 
-  async updateRequestStatus(id: string, status: SupportRequest['status']): Promise<boolean> {
+  async updateRequestStatus(id: string, status: SupportRequest['status'], extraData: Partial<SupportRequest> = {}): Promise<boolean> {
     try {
       const response = await fetch(`${API_ENDPOINT}/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
+        body: JSON.stringify({ status, ...extraData })
       });
       return response.ok;
     } catch (error) {

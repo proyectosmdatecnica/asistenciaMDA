@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { SupportRequest, QueueStats } from '../types';
 import { 
@@ -18,7 +19,8 @@ import {
   RefreshCcw,
   ChevronDown,
   ChevronUp,
-  MessageCircle
+  MessageCircle,
+  User
 } from 'lucide-react';
 
 interface AgentDashboardProps {
@@ -83,7 +85,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
   };
 
   const exportToCSV = () => {
-    const headers = ["Ticket ID", "Usuario", "Asunto", "Estado", "Categoria", "Prioridad", "F. Creacion", "F. Cierre"];
+    const headers = ["Ticket ID", "Usuario", "Asunto", "Estado", "Categoria", "Prioridad", "Agente", "F. Creacion", "F. Cierre"];
     const rows = completed.map(r => [
       r.id,
       r.userName,
@@ -91,6 +93,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
       r.status,
       r.category || 'General',
       r.priority,
+      r.agentName || 'N/A',
       new Date(Number(r.createdAt)).toLocaleString(),
       r.completedAt ? new Date(Number(r.completedAt)).toLocaleString() : '-'
     ]);
@@ -279,6 +282,12 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       <Clock size={12} />
                       <span>{getElapsedTime(req.startedAt || req.createdAt)}</span>
                     </span>
+                    {req.agentName && (
+                      <div className="flex items-center space-x-2 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100">
+                        <User size={10} className="text-indigo-400" />
+                        <span className="text-[9px] font-black text-indigo-700 truncate max-w-[100px]">{req.agentName}</span>
+                      </div>
+                    )}
                   </div>
                   <button 
                     onClick={() => openTeamsChat(req.userId, req.id)}
@@ -317,7 +326,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       <h4 className="text-sm font-black text-gray-900 leading-none mb-1">{req.userName}</h4>
                       <div className="flex items-center space-x-2">
                         <span className={`text-[8px] px-2 py-0.5 rounded-md font-black uppercase tracking-widest ${
-                          req.priority === 'high' ? 'bg-red-500 text-white shadow-lg' : 'bg-gray-100 text-gray-500'
+                          req.priority === 'high' ? 'bg-red-500 text-white shadow-lg' : 
+                          req.priority === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
                         }`}>
                           {req.priority}
                         </span>
@@ -375,6 +385,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                 <tr className="bg-gray-50/80 border-b border-gray-100">
                   <th className="p-6 font-black text-gray-400 uppercase tracking-[0.15em] text-[10px]">Ticket & Usuario</th>
                   <th className="p-6 font-black text-gray-400 uppercase tracking-[0.15em] text-[10px]">Asunto</th>
+                  <th className="p-6 font-black text-gray-400 uppercase tracking-[0.15em] text-[10px]">Agente</th>
                   <th className="p-6 font-black text-gray-400 uppercase tracking-[0.15em] text-[10px]">Estado / Categoría</th>
                   <th className="p-6 font-black text-gray-400 uppercase tracking-[0.15em] text-[10px]">Cierre</th>
                 </tr>
@@ -395,6 +406,12 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                     </td>
                     <td className="p-6 font-bold text-gray-600 max-w-xs truncate">{req.subject}</td>
                     <td className="p-6">
+                      <div className="flex items-center space-x-2">
+                        <User size={12} className="text-gray-400" />
+                        <span className="font-black text-gray-700">{req.agentName || 'N/A'}</span>
+                      </div>
+                    </td>
+                    <td className="p-6">
                       <div className="flex flex-col space-y-1.5">
                         <span className={`w-fit px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest ${
                           req.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
@@ -412,7 +429,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                 ))}
                 {completed.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="p-20 text-center">
+                    <td colSpan={5} className="p-20 text-center">
                       <p className="text-gray-300 text-xs font-black uppercase tracking-widest">Sin registros históricos</p>
                     </td>
                   </tr>
