@@ -6,7 +6,7 @@ import UserRequestView from './components/UserRequestView';
 import HelpModal from './components/HelpModal';
 import { SupportRequest, QueueStats, AppRole } from './types';
 import { storageService } from './services/dataService';
-import { Loader2, RefreshCw, Wifi, WifiOff, Activity } from 'lucide-react';
+import { Loader2, RefreshCw, Wifi, WifiOff, Activity, ShieldAlert } from 'lucide-react';
 
 const App: React.FC = () => {
   const [role, setRole] = useState<AppRole>('user');
@@ -62,10 +62,9 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const initTeams = async () => {
-      // Timeout de seguridad: Si Teams no responde en 3s, procedemos
       const sdkTimeout = setTimeout(() => {
         if (!isTeamsReady) {
-          console.warn("Teams SDK Init Timeout - Proceeding as guest/browser");
+          console.warn("Teams SDK Init Timeout - Proceeding as guest");
           setIsTeamsReady(true);
         }
       }, 3000);
@@ -91,14 +90,12 @@ const App: React.FC = () => {
     initTeams();
   }, []);
 
-  // REFRESH DATA cuando el SDK esté listo O cuando el usuario cambie (Persistencia)
   useEffect(() => {
     if (isTeamsReady) {
       refreshData();
     }
   }, [isTeamsReady, currentUserId, refreshData]);
 
-  // Timer de refresco automático
   useEffect(() => {
     const interval = setInterval(() => {
       setCountdown(prev => {
@@ -168,6 +165,29 @@ const App: React.FC = () => {
   return (
     <Layout role={role} onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')} onOpenHelp={() => setIsHelpOpen(true)}>
       <div className="relative min-h-full pb-20">
+        {/* Banner de configuración inicial si no hay agentes */}
+        {authorizedAgents.length === 0 && !isInitialLoading && (
+          <div className="max-w-4xl mx-auto mb-8 animate-in slide-in-from-top-4">
+            <div className="bg-amber-600 text-white p-6 rounded-[2rem] shadow-xl flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <div className="bg-white/20 p-3 rounded-2xl">
+                  <ShieldAlert size={24} />
+                </div>
+                <div>
+                  <h4 className="font-black text-sm uppercase tracking-widest">Configuración Inicial Requerida</h4>
+                  <p className="text-xs font-bold opacity-80">No hay agentes de TI registrados en el sistema todavía.</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => handleAgentManagement('add', currentUserId)}
+                className="bg-white text-amber-700 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-gray-100 transition-all shadow-lg"
+              >
+                Registrarme como Agente
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-3 bg-white px-5 py-3 rounded-full shadow-2xl border border-gray-100 text-[11px] font-black">
           <div className="relative">
             {lastSyncStatus === 'online' ? <Wifi size={14} className="text-emerald-500" /> : <WifiOff size={14} className="text-red-500" />}
