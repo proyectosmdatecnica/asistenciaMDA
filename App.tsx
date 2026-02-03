@@ -6,7 +6,7 @@ import UserRequestView from './components/UserRequestView';
 import HelpModal from './components/HelpModal';
 import { SupportRequest, QueueStats, AppRole } from './types';
 import { storageService } from './services/dataService';
-import { Loader2, RefreshCw, Wifi, WifiOff, Activity, ShieldAlert, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Loader2, RefreshCw, Wifi, WifiOff, Activity, ShieldAlert, CheckCircle2, AlertCircle, Terminal } from 'lucide-react';
 
 const App: React.FC = () => {
   const [role, setRole] = useState<AppRole>('user');
@@ -19,13 +19,18 @@ const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [lastSyncStatus, setLastSyncStatus] = useState<'online' | 'offline'>('online');
+  const [lastError, setLastError] = useState<string | null>(null);
+  const [showDebug, setShowDebug] = useState(false);
   const [countdown, setCountdown] = useState(15);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   
   const prevWaitingCount = useRef(0);
 
   const refreshData = useCallback(async (silent = false) => {
-    if (!silent) setIsSyncing(true);
+    if (!silent) {
+      setIsSyncing(true);
+      setLastError(null);
+    }
     try {
       const [data, agents] = await Promise.all([
         storageService.fetchAllRequests(),
@@ -35,15 +40,16 @@ const App: React.FC = () => {
       setAuthorizedAgents(agents);
       setRequests(data);
       setLastSyncStatus('online');
+      setLastError(null);
       setCountdown(15);
 
-      // Si el usuario actual está en la lista de agentes, cambiar rol automáticamente
       if (agents.some(a => a.toLowerCase() === currentUserId.toLowerCase())) {
         setRole('agent');
       }
-    } catch (e) {
-      console.error("Sync Error:", e);
+    } catch (e: any) {
+      console.error("Sync Error Details:", e);
       setLastSyncStatus('offline');
+      setLastError(e.message || "Error desconocido de conexión");
     } finally {
       if (!silent) setIsSyncing(false);
       setIsInitialLoading(false);
@@ -112,25 +118,35 @@ const App: React.FC = () => {
 
   const handleCreateOrUpdate = useCallback(async (data: Partial<SupportRequest>, id?: string) => {
     setIsSyncing(true);
-    let success = false;
-    if (id) {
-      success = await storageService.updateRequestStatus(id, 'waiting', {
-        subject: data.subject,
-        description: data.description,
-        priority: data.priority
-      });
-    } else {
-      success = await storageService.saveRequest({ ...data, userId: currentUserId, userName: currentUserName });
+    try {
+      if (id) {
+        await storageService.updateRequestStatus(id, 'waiting', {
+          subject: data.subject,
+          description: data.description,
+          priority: data.priority
+        });
+      } else {
+        await storageService.saveRequest({ ...data, userId: currentUserId, userName: currentUserName });
+      }
+      refreshData(true);
+    } catch (e: any) {
+      window.alert("No se pudo guardar: " + e.message);
+    } finally {
+      setIsSyncing(false);
     }
-    if (success) refreshData(true);
-    setIsSyncing(false);
   }, [currentUserId, currentUserName, refreshData]);
 
   const handleUpdateStatus = useCallback(async (id: string, newStatus: SupportRequest['status']) => {
     setIsSyncing(true);
-    const agentData = newStatus === 'in-progress' ? { agentId: currentUserId, agentName: currentUserName } : {};
-    if (await storageService.updateRequestStatus(id, newStatus, agentData)) refreshData(true);
-    setIsSyncing(false);
+    try {
+      const agentData = newStatus === 'in-progress' ? { agentId: currentUserId, agentName: currentUserName } : {};
+      await storageService.updateRequestStatus(id, newStatus, agentData);
+      refreshData(true);
+    } catch (e: any) {
+      window.alert("Error al actualizar estado: " + e.message);
+    } finally {
+      setIsSyncing(false);
+    }
   }, [currentUserId, currentUserName, refreshData]);
 
   const handleAgentManagement = async (action: 'add' | 'remove', email: string) => {
@@ -138,27 +154,28 @@ const App: React.FC = () => {
     if (action === 'add') {
       setIsRegistering(true);
       try {
-        console.log("Intentando registrar email:", targetEmail);
         const success = await storageService.addAgent(targetEmail);
         if (success) {
-          // Cambio inmediato de UI para mejor UX
           setRole('agent');
-          // Actualizar la lista real de agentes
           await refreshData();
           window.alert("¡Registro exitoso! Ahora eres agente de TI.");
-        } else {
-          window.alert("Error: El servidor respondió con un error al registrar el agente.");
         }
       } catch (err: any) {
-        window.alert("Error de red: " + (err.message || "No se pudo conectar con el servidor."));
+        console.error("Critical Register Error:", err);
+        window.alert("FALLO CRÍTICO: " + err.message);
       } finally {
         setIsRegistering(false);
       }
     } else {
       setIsSyncing(true);
-      await storageService.removeAgent(targetEmail);
-      await refreshData();
-      setIsSyncing(false);
+      try {
+        await storageService.removeAgent(targetEmail);
+        await refreshData();
+      } catch (e: any) {
+        window.alert("Error: " + e.message);
+      } finally {
+        setIsSyncing(false);
+      }
     }
   };
 
@@ -176,8 +193,38 @@ const App: React.FC = () => {
   return (
     <Layout role={role} onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')} onOpenHelp={() => setIsHelpOpen(true)}>
       <div className="relative min-h-full pb-20">
+        
+        {/* Banner de error con diagnóstico */}
+        {lastSyncStatus === 'offline' && (
+          <div className="max-w-4xl mx-auto mb-8 animate-in slide-in-from-top-4">
+            <div className="bg-red-600 text-white p-5 rounded-[2rem] shadow-2xl flex flex-col space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <AlertCircle size={20} />
+                  <span className="text-xs font-black uppercase tracking-widest">Error de conexión con el servidor</span>
+                </div>
+                <button 
+                  onClick={() => setShowDebug(!showDebug)}
+                  className="bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center space-x-1"
+                >
+                  <Terminal size={12} />
+                  <span>{showDebug ? 'Ocultar detalles' : 'Ver detalles técnicos'}</span>
+                </button>
+              </div>
+              {showDebug && (
+                <div className="bg-black/20 p-4 rounded-2xl font-mono text-[10px] break-all border border-white/10">
+                  <p className="mb-1 text-red-200">Mensaje: {lastError}</p>
+                  <p className="text-gray-300">Usuario: {currentUserId}</p>
+                  <p className="text-gray-300">Endpoint: /api/agents</p>
+                  <p className="mt-2 text-yellow-200 uppercase text-[8px] font-bold">Verifica el Firewall de SQL en Azure o el SqlConnectionString.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Banner de configuración inicial si no hay agentes */}
-        {authorizedAgents.length === 0 && !isInitialLoading && role === 'user' && (
+        {authorizedAgents.length === 0 && !isInitialLoading && role === 'user' && lastSyncStatus === 'online' && (
           <div className="max-w-4xl mx-auto mb-8 animate-in slide-in-from-top-4">
             <div className="bg-amber-600 text-white p-6 rounded-[2rem] shadow-xl flex items-center justify-between">
               <div className="flex items-center space-x-4">
@@ -200,14 +247,6 @@ const App: React.FC = () => {
                 <span>{isRegistering ? 'Registrando...' : 'Registrarme como Agente'}</span>
               </button>
             </div>
-          </div>
-        )}
-
-        {/* Indicador de error de conexión persistente */}
-        {lastSyncStatus === 'offline' && (
-          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[60] bg-red-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center space-x-3 text-xs font-black uppercase tracking-widest animate-bounce">
-            <AlertCircle size={16} />
-            <span>Error de conexión con el servidor</span>
           </div>
         )}
 
