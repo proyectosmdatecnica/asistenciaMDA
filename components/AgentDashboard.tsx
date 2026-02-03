@@ -4,7 +4,7 @@ import { SupportRequest, QueueStats } from '../types';
 import { 
   Clock, CheckCircle, Search, History, ListFilter, Monitor, Cpu, Globe, Key, 
   Download, Zap, XCircle, RefreshCcw, ChevronDown, ChevronUp, MessageCircle, 
-  User, LayoutGrid, List, Settings, Plus, Trash2, Activity, Users
+  User, LayoutGrid, List, Settings, Plus, Trash2, Activity, Users, RotateCcw
 } from 'lucide-react';
 
 interface AgentDashboardProps {
@@ -20,7 +20,6 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'queue' | 'history' | 'settings'>('queue');
   const [viewMode, setViewMode] = useState<'standard' | 'compact'>('standard');
-  const [expandedTickets, setExpandedTickets] = useState<Record<string, boolean>>({});
   const [newAgentEmail, setNewAgentEmail] = useState('');
 
   useEffect(() => {
@@ -93,23 +92,17 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
             <Search size={14} className="text-gray-400 mr-3" />
             <input type="text" placeholder="Buscar ticket o usuario..." className="bg-transparent border-none outline-none text-xs font-bold w-full text-gray-700" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
-          {activeTab === 'queue' && (
-            <div className="flex bg-gray-100 p-1 rounded-xl shrink-0">
-              <button onClick={() => setViewMode('standard')} className={`p-2 rounded-lg transition-all ${viewMode === 'standard' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-400'}`} title="Vista Estándar"><List size={16}/></button>
-              <button onClick={() => setViewMode('compact')} className={`p-2 rounded-lg transition-all ${viewMode === 'compact' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-400'}`} title="Vista Grilla"><LayoutGrid size={16}/></button>
-            </div>
-          )}
         </div>
       </div>
 
       {activeTab === 'queue' ? (
-        <div className={viewMode === 'compact' ? "grid grid-cols-1 md:grid-cols-3 gap-6 items-start" : "grid grid-cols-1 lg:grid-cols-2 gap-10 items-start"}>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
           
           {/* En Atención */}
           <div className="space-y-4">
-            <h3 className="text-[11px] font-black text-indigo-500 uppercase tracking-widest px-2">En Atención ({inProgress.length})</h3>
+            <h3 className="text-[11px] font-black text-indigo-500 uppercase tracking-widest px-2">Mi Atención Actual ({inProgress.length})</h3>
             {inProgress.map(req => (
-              <div key={req.id} className="bg-white border-2 border-indigo-100 rounded-[2rem] p-5 shadow-lg animate-in slide-in-from-left-4">
+              <div key={req.id} className="bg-white border-2 border-indigo-100 rounded-[2rem] p-6 shadow-xl animate-in slide-in-from-left-4">
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black">{req.userName.charAt(0)}</div>
@@ -118,20 +111,48 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       <p className="text-[9px] text-indigo-400 font-bold uppercase mt-1">Ticket {req.id}</p>
                     </div>
                   </div>
-                  <button onClick={() => onUpdateStatus(req.id, 'completed')} className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"><CheckCircle size={18}/></button>
+                  <div className="flex space-x-2">
+                    <button 
+                      onClick={() => onUpdateStatus(req.id, 'waiting')} 
+                      className="bg-amber-50 text-amber-600 p-2.5 rounded-xl hover:bg-amber-600 hover:text-white transition-all shadow-sm"
+                      title="Devolver a la cola"
+                    >
+                      <RotateCcw size={16}/>
+                    </button>
+                    <button 
+                      onClick={() => onUpdateStatus(req.id, 'cancelled')} 
+                      className="bg-red-50 text-red-600 p-2.5 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-sm"
+                      title="Cerrar sin solución"
+                    >
+                      <XCircle size={16}/>
+                    </button>
+                    <button 
+                      onClick={() => onUpdateStatus(req.id, 'completed')} 
+                      className="bg-emerald-50 text-emerald-600 p-2.5 rounded-xl hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
+                      title="Marcar como solucionado"
+                    >
+                      <CheckCircle size={16}/>
+                    </button>
+                  </div>
                 </div>
                 <p className="text-[11px] font-black text-gray-700 line-clamp-2 mb-4 px-1">{req.subject}</p>
                 <div className="flex items-center justify-between pt-4 border-t border-gray-50">
-                  <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-3 py-1 rounded-lg">{getElapsedTime(req.startedAt || req.createdAt)}</span>
-                  <button onClick={() => openTeamsChat(req.userId, req.id)} className="text-[10px] font-black text-indigo-600 hover:bg-indigo-50 px-3 py-1 rounded-lg uppercase">Contactar</button>
+                  <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-3 py-1 rounded-lg">Cronómetro: {getElapsedTime(req.startedAt || req.createdAt)}</span>
+                  <button onClick={() => openTeamsChat(req.userId, req.id)} className="text-[10px] font-black text-indigo-600 hover:bg-indigo-50 px-3 py-1 rounded-lg uppercase bg-indigo-50/50">Abrir Chat de Teams</button>
                 </div>
               </div>
             ))}
+            {inProgress.length === 0 && (
+              <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-[2rem] p-12 text-center">
+                <Activity size={32} className="mx-auto text-gray-300 mb-4" />
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">No tienes tickets asignados</p>
+              </div>
+            )}
           </div>
 
           {/* En Espera */}
-          <div className={viewMode === 'compact' ? "md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-5"}>
-            <h3 className="text-[11px] font-black text-amber-500 uppercase tracking-widest px-2 col-span-full">Lista de Espera ({waiting.length})</h3>
+          <div className="space-y-5">
+            <h3 className="text-[11px] font-black text-amber-500 uppercase tracking-widest px-2">Lista de Espera ({waiting.length})</h3>
             {waiting.map(req => (
               <div key={req.id} className={`bg-white rounded-[2rem] p-5 border-2 animate-in slide-in-from-right-4 ${req.priority === 'high' ? 'border-red-100' : 'border-gray-50 shadow-sm'}`}>
                 <div className="flex justify-between items-start mb-3">
@@ -139,18 +160,24 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                     <h4 className="text-xs font-black text-gray-900 mb-1">{req.userName}</h4>
                     <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase ${req.priority === 'high' ? 'bg-red-500 text-white' : 'bg-amber-100 text-amber-700'}`}>{req.priority}</span>
                   </div>
-                  <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className="bg-indigo-600 text-white text-[9px] font-black px-4 py-2 rounded-xl shadow-lg">TOMAR</button>
+                  <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className="bg-indigo-600 text-white text-[9px] font-black px-4 py-2 rounded-xl shadow-lg hover:bg-indigo-700 transition-all">TOMAR TICKET</button>
                 </div>
                 {req.aiSummary && (
                   <div className="bg-amber-50/50 p-3 rounded-xl mb-3">
                     <p className="text-[10px] text-amber-900 font-bold leading-snug">
-                      <span className="text-amber-600 font-black uppercase mr-1">Resumen caso:</span>{req.aiSummary}
+                      <span className="text-amber-600 font-black uppercase mr-1">Análisis IA:</span>{req.aiSummary}
                     </p>
                   </div>
                 )}
-                {viewMode === 'standard' && <p className="text-[10px] text-gray-500 italic line-clamp-3">{req.description || "Sin detalles."}</p>}
+                <p className="text-[10px] text-gray-500 italic line-clamp-2 px-1">{req.description || "Sin detalles adicionales."}</p>
               </div>
             ))}
+            {waiting.length === 0 && (
+              <div className="bg-emerald-50/50 border-2 border-dashed border-emerald-100 rounded-[2rem] p-12 text-center">
+                <CheckCircle size={32} className="mx-auto text-emerald-200 mb-4" />
+                <p className="text-xs font-bold text-emerald-400 uppercase tracking-widest">Cola vacía. ¡Buen trabajo!</p>
+              </div>
+            )}
           </div>
         </div>
       ) : activeTab === 'settings' ? (
@@ -179,12 +206,17 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
         /* History Table */
         <div className="bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden shadow-sm">
            <table className="w-full text-left text-xs border-collapse">
-              <thead><tr className="bg-gray-50 border-b border-gray-100"><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Usuario / Ticket</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Asunto</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Atendido por</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Cierre</th></tr></thead>
+              <thead><tr className="bg-gray-50 border-b border-gray-100"><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Usuario / Ticket</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Asunto</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Estado Final</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Atendido por</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Cierre</th></tr></thead>
               <tbody className="divide-y divide-gray-50">
                 {completed.map(req => (
                   <tr key={req.id} className="hover:bg-indigo-50/10 transition-colors">
                     <td className="p-6"><p className="font-black text-gray-900">{req.userName}</p><p className="text-[10px] text-gray-400 font-mono">{req.id}</p></td>
                     <td className="p-6 font-bold text-gray-600 max-w-xs truncate">{req.subject}</td>
+                    <td className="p-6">
+                      <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${req.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                        {req.status === 'completed' ? 'Solucionado' : 'No Solucionado'}
+                      </span>
+                    </td>
                     <td className="p-6 font-black text-gray-700">{req.agentName || 'N/A'}</td>
                     <td className="p-6 text-gray-400">{req.completedAt ? new Date(Number(req.completedAt)).toLocaleDateString() : '-'}</td>
                   </tr>

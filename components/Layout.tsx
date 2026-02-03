@@ -29,8 +29,6 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onSwitchRole, onOpenHel
           </div>
         )}
         
-        {/* Sección Debug Eliminada */}
-
         <div 
           className="mt-auto p-2 hover:bg-[#44455e] rounded cursor-pointer transition-colors text-amber-400"
           onClick={onOpenHelp}
@@ -45,7 +43,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onSwitchRole, onOpenHel
         {/* Cabecera superior */}
         <header className="h-[48px] bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0">
           <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2" onClick={onSwitchRole} style={{cursor: 'pointer'}}>
+            <div className="flex items-center space-x-2">
               <div className="w-6 h-6 bg-[#5b5fc7] rounded-md flex items-center justify-center">
                 <MessageSquare size={14} className="text-white" />
               </div>
