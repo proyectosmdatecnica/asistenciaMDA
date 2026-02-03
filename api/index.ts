@@ -4,7 +4,6 @@ import * as sql from "mssql";
 import { GoogleGenAI, Type } from "@google/genai";
 
 const sqlConfigString = process.env.SqlConnectionString;
-const API_KEY = process.env.API_KEY;
 
 let pool: sql.ConnectionPool | null = null;
 
@@ -35,15 +34,21 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
         
         if (method === "post") {
             const r: any = await req.json();
+            
+            // Generar ID Correlativo T-000001
+            const countResult = await poolConnection.request().query("SELECT COUNT(*) as total FROM requests");
+            const nextNum = (countResult.recordset[0].total + 1).toString().padStart(6, '0');
+            const newId = `T-${nextNum}`;
+
             const userPriority = r.priority || 'medium';
             let triage = { summary: r.subject, category: 'General' };
             
-            if (API_KEY && API_KEY !== "undefined" && API_KEY !== "") {
+            if (process.env.API_KEY && process.env.API_KEY !== "undefined") {
                 try {
-                    const ai = new GoogleGenAI({ apiKey: API_KEY });
+                    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
                     const response = await ai.models.generateContent({
                         model: "gemini-3-flash-preview",
-                        contents: `Analiza: ${r.subject}. Desc: ${r.description}`,
+                        contents: `Analiza este problema técnico. Resúmelo en 10 palabras y clasifícalo. Asunto: ${r.subject}. Desc: ${r.description}`,
                         config: {
                             responseMimeType: "application/json",
                             responseSchema: {
@@ -61,7 +66,7 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
             }
 
             await poolConnection.request()
-                .input('id', sql.VarChar, r.id)
+                .input('id', sql.VarChar, newId)
                 .input('userId', sql.VarChar, r.userId)
                 .input('userName', sql.VarChar, r.userName)
                 .input('subject', sql.VarChar, r.subject)
@@ -74,37 +79,49 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                 .query(`INSERT INTO requests (id, userId, userName, subject, description, status, createdAt, priority, aiSummary, category) 
                         VALUES (@id, @userId, @userName, @subject, @description, @status, @createdAt, @priority, @aiSummary, @category)`);
             
-            return { status: 201, jsonBody: { success: true } };
+            return { status: 201, jsonBody: { success: true, id: newId } };
         }
 
         if (method === "patch") {
             const body: any = await req.json();
-            context.log(`Actualizando Ticket ${id} a estado ${body.status} por agente ${body.agentName || 'N/A'}`);
             
             try {
-                await poolConnection.request()
-                    .input('id', sql.VarChar, id)
-                    .input('status', sql.VarChar, body.status)
-                    .input('agentId', sql.VarChar, body.agentId || null)
-                    .input('agentName', sql.VarChar, body.agentName || null)
-                    .input('now', sql.BigInt, Date.now())
-                    .query(`UPDATE requests SET 
-                            status = @status, 
-                            agentId = CASE WHEN @status = 'in-progress' THEN @agentId WHEN @status = 'waiting' THEN NULL ELSE agentId END,
-                            agentName = CASE WHEN @status = 'in-progress' THEN @agentName WHEN @status = 'waiting' THEN NULL ELSE agentName END,
-                            startedAt = CASE WHEN @status = 'in-progress' AND startedAt IS NULL THEN @now WHEN @status = 'waiting' THEN NULL ELSE startedAt END, 
-                            completedAt = CASE WHEN @status IN ('completed', 'cancelled') THEN @now WHEN @status IN ('waiting', 'in-progress') THEN NULL ELSE completedAt END 
-                            WHERE id = @id`);
+                // Caso A: Edición de datos por el usuario (solo si está en espera)
+                if (body.subject || body.description || body.priority) {
+                    await poolConnection.request()
+                        .input('id', sql.VarChar, id)
+                        .input('subject', sql.VarChar, body.subject)
+                        .input('description', sql.Text, body.description)
+                        .input('priority', sql.VarChar, body.priority)
+                        .query(`UPDATE requests SET 
+                                subject = ISNULL(@subject, subject), 
+                                description = ISNULL(@description, description), 
+                                priority = ISNULL(@priority, priority)
+                                WHERE id = @id AND status = 'waiting'`);
+                } else {
+                    // Caso B: Actualización de estado por el agente
+                    await poolConnection.request()
+                        .input('id', sql.VarChar, id)
+                        .input('status', sql.VarChar, body.status)
+                        .input('agentId', sql.VarChar, body.agentId || null)
+                        .input('agentName', sql.VarChar, body.agentName || null)
+                        .input('now', sql.BigInt, Date.now())
+                        .query(`UPDATE requests SET 
+                                status = @status, 
+                                agentId = CASE WHEN @status = 'in-progress' THEN @agentId WHEN @status = 'waiting' THEN NULL ELSE agentId END,
+                                agentName = CASE WHEN @status = 'in-progress' THEN @agentName WHEN @status = 'waiting' THEN NULL ELSE agentName END,
+                                startedAt = CASE WHEN @status = 'in-progress' AND startedAt IS NULL THEN @now WHEN @status = 'waiting' THEN NULL ELSE startedAt END, 
+                                completedAt = CASE WHEN @status IN ('completed', 'cancelled') THEN @now WHEN @status IN ('waiting', 'in-progress') THEN NULL ELSE completedAt END 
+                                WHERE id = @id`);
+                }
                 return { status: 200, jsonBody: { success: true } };
             } catch (sqlErr: any) {
-                context.error("Error SQL en PATCH:", sqlErr.message);
-                return { status: 500, jsonBody: { error: "Error de base de datos. ¿Faltan las columnas agentId/agentName?", detail: sqlErr.message } };
+                return { status: 500, jsonBody: { error: sqlErr.message } };
             }
         }
 
         return { status: 405, body: "Method Not Allowed" };
     } catch (err: any) {
-        context.error(`Handler Error: ${err.message}`);
         return { status: 500, jsonBody: { error: err.message } };
     }
 }
