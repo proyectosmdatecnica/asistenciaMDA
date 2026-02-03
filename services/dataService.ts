@@ -7,15 +7,10 @@ export const storageService = {
   async fetchAllRequests(): Promise<SupportRequest[]> {
     try {
       const response = await fetch(API_ENDPOINT);
-      if (!response.ok) {
-          const errData = await response.json().catch(() => ({ error: 'Error de red o servidor 503/500' }));
-          console.error("API Fetch Error:", response.status, errData);
-          return [];
-      }
+      if (!response.ok) return [];
       const data = await response.json();
       return Array.isArray(data) ? data : [];
     } catch (error) {
-      console.error("Network Exception:", error);
       return [];
     }
   },
@@ -27,17 +22,8 @@ export const storageService = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request)
       });
-      
-      if (!response.ok) {
-          const errData = await response.json().catch(() => ({ error: 'Servicio no disponible (503)' }));
-          console.error("API POST Error:", response.status, errData);
-          alert(`Error al enviar: ${errData.detail || errData.error || 'El servidor de base de datos no responde'}`);
-          return false;
-      }
-      return true;
+      return response.ok;
     } catch (error) {
-      console.error("Network Error:", error);
-      alert("No se pudo conectar con el servidor. Verifica tu conexión a internet.");
       return false;
     }
   },
@@ -49,9 +35,16 @@ export const storageService = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status, ...extraData })
       });
-      return response.ok;
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Error al actualizar estado:", response.status, errorText);
+        alert("Error del servidor: Revisa si la base de datos tiene las columnas agentId y agentName.");
+        return false;
+      }
+      return true;
     } catch (error) {
-      console.error("Update Status Error:", error);
+      console.error("Excepción en updateStatus:", error);
       return false;
     }
   }
