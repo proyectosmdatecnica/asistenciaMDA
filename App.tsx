@@ -6,7 +6,7 @@ import UserRequestView from './components/UserRequestView';
 import HelpModal from './components/HelpModal';
 import { SupportRequest, QueueStats, AppRole } from './types';
 import { storageService } from './services/dataService';
-import { Loader2, RefreshCw, Wifi, WifiOff, Activity, ShieldAlert } from 'lucide-react';
+import { Loader2, RefreshCw, Wifi, WifiOff, Activity, ShieldAlert, CheckCircle2, AlertCircle } from 'lucide-react';
 
 const App: React.FC = () => {
   const [role, setRole] = useState<AppRole>('user');
@@ -17,6 +17,7 @@ const App: React.FC = () => {
   const [isTeamsReady, setIsTeamsReady] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
   const [lastSyncStatus, setLastSyncStatus] = useState<'online' | 'offline'>('online');
   const [countdown, setCountdown] = useState(15);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
@@ -40,25 +41,14 @@ const App: React.FC = () => {
       if (agents.some(a => a.toLowerCase() === currentUserId.toLowerCase())) {
         setRole('agent');
       }
-
-      if (role === 'agent') {
-        const currentWaiting = data.filter(r => r.status === 'waiting').length;
-        if (currentWaiting > prevWaitingCount.current) {
-          try {
-            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
-            audio.volume = 0.4;
-            audio.play().catch(() => {});
-          } catch(e) {}
-        }
-        prevWaitingCount.current = currentWaiting;
-      }
     } catch (e) {
+      console.error("Sync Error:", e);
       setLastSyncStatus('offline');
     } finally {
       if (!silent) setIsSyncing(false);
       setIsInitialLoading(false);
     }
-  }, [role, currentUserId]);
+  }, [currentUserId]);
 
   useEffect(() => {
     const initTeams = async () => {
@@ -144,11 +134,32 @@ const App: React.FC = () => {
   }, [currentUserId, currentUserName, refreshData]);
 
   const handleAgentManagement = async (action: 'add' | 'remove', email: string) => {
-    setIsSyncing(true);
-    if (action === 'add') await storageService.addAgent(email);
-    else await storageService.removeAgent(email);
-    await refreshData();
-    setIsSyncing(false);
+    const targetEmail = email || currentUserId;
+    if (action === 'add') {
+      setIsRegistering(true);
+      try {
+        console.log("Intentando registrar email:", targetEmail);
+        const success = await storageService.addAgent(targetEmail);
+        if (success) {
+          // Cambio inmediato de UI para mejor UX
+          setRole('agent');
+          // Actualizar la lista real de agentes
+          await refreshData();
+          window.alert("¡Registro exitoso! Ahora eres agente de TI.");
+        } else {
+          window.alert("Error: El servidor respondió con un error al registrar el agente.");
+        }
+      } catch (err: any) {
+        window.alert("Error de red: " + (err.message || "No se pudo conectar con el servidor."));
+      } finally {
+        setIsRegistering(false);
+      }
+    } else {
+      setIsSyncing(true);
+      await storageService.removeAgent(targetEmail);
+      await refreshData();
+      setIsSyncing(false);
+    }
   };
 
   const activeRequestsForUser = useMemo(() => 
@@ -166,32 +177,44 @@ const App: React.FC = () => {
     <Layout role={role} onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')} onOpenHelp={() => setIsHelpOpen(true)}>
       <div className="relative min-h-full pb-20">
         {/* Banner de configuración inicial si no hay agentes */}
-        {authorizedAgents.length === 0 && !isInitialLoading && (
+        {authorizedAgents.length === 0 && !isInitialLoading && role === 'user' && (
           <div className="max-w-4xl mx-auto mb-8 animate-in slide-in-from-top-4">
             <div className="bg-amber-600 text-white p-6 rounded-[2rem] shadow-xl flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <div className="bg-white/20 p-3 rounded-2xl">
-                  <ShieldAlert size={24} />
+                  {isRegistering ? <Loader2 size={24} className="animate-spin" /> : <ShieldAlert size={24} />}
                 </div>
                 <div>
                   <h4 className="font-black text-sm uppercase tracking-widest">Configuración Inicial Requerida</h4>
-                  <p className="text-xs font-bold opacity-80">No hay agentes de TI registrados en el sistema todavía.</p>
+                  <p className="text-xs font-bold opacity-80">
+                    {isRegistering ? 'Procesando registro...' : 'No hay agentes de TI registrados en el sistema todavía.'}
+                  </p>
                 </div>
               </div>
               <button 
+                disabled={isRegistering}
                 onClick={() => handleAgentManagement('add', currentUserId)}
-                className="bg-white text-amber-700 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-gray-100 transition-all shadow-lg"
+                className={`bg-white text-amber-700 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-lg flex items-center space-x-2 ${isRegistering ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100 active:scale-95'}`}
               >
-                Registrarme como Agente
+                {isRegistering ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                <span>{isRegistering ? 'Registrando...' : 'Registrarme como Agente'}</span>
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Indicador de error de conexión persistente */}
+        {lastSyncStatus === 'offline' && (
+          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[60] bg-red-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center space-x-3 text-xs font-black uppercase tracking-widest animate-bounce">
+            <AlertCircle size={16} />
+            <span>Error de conexión con el servidor</span>
           </div>
         )}
 
         <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-3 bg-white px-5 py-3 rounded-full shadow-2xl border border-gray-100 text-[11px] font-black">
           <div className="relative">
             {lastSyncStatus === 'online' ? <Wifi size={14} className="text-emerald-500" /> : <WifiOff size={14} className="text-red-500" />}
-            {isSyncing && <Activity size={10} className="absolute -top-1 -right-1 text-indigo-500 animate-pulse" />}
+            {(isSyncing || isRegistering) && <Activity size={10} className="absolute -top-1 -right-1 text-indigo-500 animate-pulse" />}
           </div>
           <span className="text-gray-400 uppercase tracking-widest">{isSyncing ? 'Sincronizando' : `Refresco en ${countdown}s`}</span>
           <button onClick={() => refreshData()} className="p-1.5 hover:bg-gray-100 rounded-full"><RefreshCw size={12} className="text-indigo-400" /></button>
