@@ -37,10 +37,8 @@ const App: React.FC = () => {
           try {
             const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
             audio.volume = 0.4;
-            audio.play().catch(() => console.log("Audio play blocked"));
-          } catch (e) {
-            console.warn("Notification sound error", e);
-          }
+            audio.play().catch(() => {});
+          } catch (e) {}
         }
         prevWaitingCount.current = currentWaiting;
       }
@@ -49,13 +47,13 @@ const App: React.FC = () => {
       setLastSyncStatus('online');
       setCountdown(15);
     } catch (e) {
-      console.error("Sync error:", e);
       setLastSyncStatus('offline');
     } finally {
       if (!silent) setIsSyncing(false);
     }
   }, [role]);
 
+  // Efecto para inicializar Teams y cargar datos iniciales una vez resuelto el ID
   useEffect(() => {
     const init = async () => {
       try {
@@ -68,20 +66,29 @@ const App: React.FC = () => {
             const upn = context.user.userPrincipalName.toLowerCase();
             setCurrentUserId(upn);
             setCurrentUserName(context.user.displayName || upn);
+            
             if (AUTHORIZED_AGENTS.some(a => a.toLowerCase() === upn)) {
               setRole('agent');
             }
           }
         }
       } catch (e) {
-        console.warn("Teams context not available.");
+        console.error("Teams Init Error", e);
       } finally {
         setIsTeamsReady(true);
+        // Disparar carga de datos inmediata tras resolver identidad
         refreshData();
       }
     };
     init();
-  }, [refreshData]);
+  }, []); // Solo al montar una vez
+
+  // Refrescar datos cuando cambie el ID de usuario (caso de persistencia)
+  useEffect(() => {
+    if (currentUserId !== 'user-guest') {
+      refreshData(true);
+    }
+  }, [currentUserId, refreshData]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -116,40 +123,46 @@ const App: React.FC = () => {
     };
   }, [requests]);
 
-  const handleCreateRequest = useCallback(async (data: Partial<SupportRequest>) => {
-    const newRequest: SupportRequest = {
-      id: `T-${Math.floor(1000 + Math.random() * 9000)}`,
-      userId: currentUserId,
-      userName: currentUserName,
-      subject: data.subject || '',
-      description: data.description || '',
-      status: 'waiting',
-      createdAt: Date.now(),
-      priority: data.priority || 'medium',
-      aiSummary: data.aiSummary,
-      category: data.category
-    };
-    
+  const handleCreateOrUpdate = useCallback(async (data: Partial<SupportRequest>, id?: string) => {
     setIsSyncing(true);
-    const success = await storageService.saveRequest(newRequest);
+    let success = false;
+
+    // IMPORTANTE: Si hay ID, es una actualización (PATCH), si no, es creación (POST)
+    if (id) {
+      success = await storageService.updateRequestStatus(id, 'waiting', {
+        subject: data.subject,
+        description: data.description,
+        priority: data.priority
+      });
+    } else {
+      const newRequest: any = {
+        userId: currentUserId,
+        userName: currentUserName,
+        subject: data.subject,
+        description: data.description,
+        priority: data.priority,
+        aiSummary: data.aiSummary,
+        category: data.category
+      };
+      success = await storageService.saveRequest(newRequest);
+    }
+    
     if (success) {
-      await refreshData(true);
+      // Esperar un breve instante para que la DB asiente antes de refrescar
+      setTimeout(() => refreshData(true), 500);
     }
     setIsSyncing(false);
   }, [currentUserId, currentUserName, refreshData]);
 
   const handleUpdateStatus = useCallback(async (id: string, newStatus: SupportRequest['status']) => {
     setIsSyncing(true);
-    // Si el estado es 'in-progress', pasamos los datos del agente actual
     const agentData = newStatus === 'in-progress' ? { 
       agentId: currentUserId, 
       agentName: currentUserName 
     } : {};
 
     const success = await storageService.updateRequestStatus(id, newStatus, agentData);
-    if (success) {
-      await refreshData(true);
-    }
+    if (success) refreshData(true);
     setIsSyncing(false);
   }, [currentUserId, currentUserName, refreshData]);
 
@@ -167,10 +180,7 @@ const App: React.FC = () => {
   if (!isTeamsReady) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-gray-50">
-        <div className="text-center animate-pulse">
-          <Loader2 className="animate-spin text-[#5b5fc7] mx-auto mb-4" size={40} />
-          <p className="text-gray-500 font-black uppercase tracking-widest text-xs">Cargando Soporte IT...</p>
-        </div>
+        <Loader2 className="animate-spin text-[#5b5fc7]" size={40} />
       </div>
     );
   }
@@ -182,28 +192,17 @@ const App: React.FC = () => {
       onOpenHelp={() => setIsHelpOpen(true)}
     >
       <div className="relative min-h-full pb-20">
-        <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-3 bg-white px-5 py-3 rounded-full shadow-2xl border border-gray-100 text-[11px] font-black group transition-all hover:pr-8">
+        <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-3 bg-white px-5 py-3 rounded-full shadow-2xl border border-gray-100 text-[11px] font-black group transition-all">
           <div className="relative">
-            {lastSyncStatus === 'online' ? (
-              <Wifi size={14} className="text-emerald-500" />
-            ) : (
-              <WifiOff size={14} className="text-red-500" />
-            )}
-            {isSyncing && (
-              <Activity size={10} className="absolute -top-1 -right-1 text-indigo-500 animate-pulse" />
-            )}
+            {lastSyncStatus === 'online' ? <Wifi size={14} className="text-emerald-500" /> : <WifiOff size={14} className="text-red-500" />}
+            {isSyncing && <Activity size={10} className="absolute -top-1 -right-1 text-indigo-500 animate-pulse" />}
           </div>
-          <span className="text-gray-400 uppercase tracking-[0.15em] whitespace-nowrap">
+          <span className="text-gray-400 uppercase tracking-widest">
             {isSyncing ? 'Sincronizando' : `Refresco en ${countdown}s`}
           </span>
-          {!isSyncing && (
-            <button 
-              onClick={() => refreshData()} 
-              className="p-1.5 hover:bg-gray-100 rounded-full transition-all active:rotate-180 duration-500"
-            >
-              <RefreshCw size={12} className="text-indigo-400" />
-            </button>
-          )}
+          <button onClick={() => refreshData()} className="p-1.5 hover:bg-gray-100 rounded-full">
+            <RefreshCw size={12} className="text-indigo-400" />
+          </button>
         </div>
 
         {role === 'agent' ? (
@@ -217,7 +216,7 @@ const App: React.FC = () => {
             activeRequests={activeRequestsForUser}
             queuePosition={getQueuePosition}
             averageWaitTime={stats.averageWaitTime}
-            onSubmit={handleCreateRequest}
+            onSubmit={handleCreateOrUpdate}
             onCancel={(id) => handleUpdateStatus(id, 'cancelled')}
           />
         )}
