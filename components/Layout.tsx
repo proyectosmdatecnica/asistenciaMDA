@@ -1,11 +1,10 @@
+
 import React from 'react';
 import { 
   Users, 
   MessageSquare, 
   Settings, 
   HelpCircle,
-  Search,
-  MoreHorizontal
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -71,15 +70,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onSwitchRole, onOpenHel
           </div>
           
           <div className="flex items-center space-x-4">
-            <div className="hidden md:flex items-center bg-gray-100 rounded-md px-3 py-1.5 space-x-2 border border-transparent focus-within:bg-white focus-within:border-indigo-300 transition-all">
-              <Search size={14} className="text-gray-400" />
-              <input 
-                type="text" 
-                placeholder="Buscar ticket..." 
-                className="bg-transparent border-none text-xs outline-none w-32 font-medium"
-              />
-            </div>
-            <div className="flex items-center space-x-3 border-l pl-4 border-gray-100">
+            <div className="flex items-center space-x-3">
               <div className="text-right hidden sm:block">
                 <p className="text-[10px] font-black text-gray-400 uppercase leading-none">Conectado como</p>
                 <p className="text-xs font-bold text-gray-700">{role === 'agent' ? 'Agente de IT' : 'Usuario'}</p>
