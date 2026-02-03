@@ -2,410 +2,195 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { SupportRequest, QueueStats } from '../types';
 import { 
-  Clock, 
-  CheckCircle, 
-  Search, 
-  History, 
-  ListFilter,
-  Monitor,
-  Cpu,
-  Globe,
-  Key,
-  Download,
-  Zap,
-  XCircle,
-  RefreshCcw,
-  ChevronDown,
-  ChevronUp,
-  MessageCircle,
-  User
+  Clock, CheckCircle, Search, History, ListFilter, Monitor, Cpu, Globe, Key, 
+  Download, Zap, XCircle, RefreshCcw, ChevronDown, ChevronUp, MessageCircle, 
+  User, LayoutGrid, List, Settings, Plus, Trash2, Activity, Users
 } from 'lucide-react';
 
 interface AgentDashboardProps {
   requests: SupportRequest[];
   stats: QueueStats;
   onUpdateStatus: (id: string, newStatus: SupportRequest['status']) => void;
+  agents: string[];
+  onManageAgent: (action: 'add' | 'remove', email: string) => void;
 }
 
-const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpdateStatus }) => {
+const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpdateStatus, agents, onManageAgent }) => {
   const [now, setNow] = useState(Date.now());
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'queue' | 'history'>('queue');
+  const [activeTab, setActiveTab] = useState<'queue' | 'history' | 'settings'>('queue');
+  const [viewMode, setViewMode] = useState<'standard' | 'compact'>('standard');
   const [expandedTickets, setExpandedTickets] = useState<Record<string, boolean>>({});
+  const [newAgentEmail, setNewAgentEmail] = useState('');
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  const toggleExpand = (id: string) => {
-    setExpandedTickets(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
   const openTeamsChat = (userId: string, ticketId: string) => {
-    const message = encodeURIComponent(`Hola! Te contacto por el Ticket numero ${ticketId}`);
-    const teamsUrl = `https://teams.microsoft.com/l/chat/0/0?users=${userId}&message=${message}`;
-    window.open(teamsUrl, '_blank');
+    const message = encodeURIComponent(`Hola! Te contacto por el Ticket número ${ticketId}`);
+    window.open(`https://teams.microsoft.com/l/chat/0/0?users=${userId}&message=${message}`, '_blank');
   };
 
-  const getCategoryIcon = (cat?: string) => {
-    switch(cat) {
-      case 'Software': return <Monitor size={14} />;
-      case 'Hardware': return <Cpu size={14} />;
-      case 'Redes': return <Globe size={14} />;
-      case 'Accesos': return <Key size={14} />;
-      default: return <ListFilter size={14} />;
-    }
-  };
-
-  const filteredRequests = useMemo(() => {
-    return requests.filter(r => 
-      r.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.id.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [requests, searchTerm]);
+  const filteredRequests = useMemo(() => requests.filter(r => 
+    r.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    r.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    r.id.toLowerCase().includes(searchTerm.toLowerCase())
+  ), [requests, searchTerm]);
 
   const waiting = filteredRequests.filter(r => r.status === 'waiting').sort((a, b) => {
-    const priorityMap = { high: 3, medium: 2, low: 1 };
-    if (priorityMap[a.priority] !== priorityMap[b.priority]) return priorityMap[b.priority] - priorityMap[a.priority];
-    return a.createdAt - b.createdAt;
+    const p = { high: 3, medium: 2, low: 1 };
+    return p[b.priority] - p[a.priority] || a.createdAt - b.createdAt;
   });
 
   const inProgress = filteredRequests.filter(r => r.status === 'in-progress');
   const completed = filteredRequests.filter(r => r.status === 'completed' || r.status === 'cancelled');
 
-  const getElapsedTime = (createdAt: number) => {
-    const seconds = Math.floor((now - createdAt) / 1000);
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const exportToCSV = () => {
-    const headers = ["Ticket ID", "Usuario", "Asunto", "Estado", "Categoria", "Prioridad", "Agente", "F. Creacion", "F. Cierre"];
-    const rows = completed.map(r => [
-      r.id,
-      r.userName,
-      `"${r.subject.replace(/"/g, '""')}"`,
-      r.status,
-      r.category || 'General',
-      r.priority,
-      r.agentName || 'N/A',
-      new Date(Number(r.createdAt)).toLocaleString(),
-      r.completedAt ? new Date(Number(r.completedAt)).toLocaleString() : '-'
-    ]);
-
-    const csvContent = "\uFEFF" + [headers, ...rows].map(e => e.join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `Reporte_IT_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const getElapsedTime = (t: number) => {
+    const s = Math.floor((now - t) / 1000);
+    const m = Math.floor(s / 60);
+    const remS = s % 60;
+    return `${m}:${remS.toString().padStart(2, '0')}`;
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-12 animate-in fade-in duration-500">
+    <div className="max-w-7xl mx-auto space-y-6 pb-12 animate-in fade-in">
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm relative overflow-hidden group">
-          <div className={`absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full opacity-5 transition-transform group-hover:scale-110 ${stats.averageWaitTime > 15 ? 'bg-red-500' : 'bg-emerald-500'}`} />
-          <div className="flex justify-between items-start mb-4">
-            <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Salud del Servicio</span>
-            <div className={`flex items-center space-x-1.5 px-2 py-1 rounded-full text-[9px] font-black ${
-              stats.averageWaitTime > 15 ? 'bg-red-50 text-red-600' : stats.averageWaitTime > 5 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'
-            }`}>
-              <Zap size={10} />
-              <span>{stats.averageWaitTime > 15 ? 'CRÍTICO' : 'ÓPTIMO'}</span>
+        {[
+          { label: 'Espera promedio', val: `${stats.averageWaitTime}min`, icon: <Zap size={14}/>, color: 'text-emerald-600' },
+          { label: 'En Espera', val: waiting.length, icon: <Clock size={14}/>, color: 'text-amber-600' },
+          { label: 'En Proceso', val: inProgress.length, icon: <Activity size={14}/>, color: 'text-indigo-600' },
+          { label: 'Resueltos Hoy', val: stats.completedToday, icon: <CheckCircle size={14}/>, color: 'text-emerald-600' }
+        ].map((s, i) => (
+          <div key={i} className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm flex flex-col justify-between">
+            <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] block mb-4">{s.label}</span>
+            <div className="flex items-end justify-between">
+              <p className="text-3xl font-black text-gray-900">{s.val}</p>
+              <div className={`${s.color} opacity-30`}>{s.icon}</div>
             </div>
           </div>
-          <p className="text-3xl font-black text-gray-900">{stats.averageWaitTime}<span className="text-sm font-bold text-gray-400 ml-1">min</span></p>
-          <p className="text-[10px] text-gray-400 font-bold mt-1">Espera promedio</p>
-        </div>
-        
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-          <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] block mb-4">En Espera</span>
-          <p className="text-3xl font-black text-gray-900">{waiting.length}</p>
-          <div className="flex items-center space-x-1 mt-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-            <p className="text-[10px] text-gray-400 font-bold">Sin asignar</p>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-          <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] block mb-4">En Proceso</span>
-          <p className="text-3xl font-black text-indigo-600">{inProgress.length}</p>
-          <div className="flex items-center space-x-1 mt-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
-            <p className="text-[10px] text-gray-400 font-bold">Siendo atendidos</p>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-          <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] block mb-4">Resueltos Hoy</span>
-          <p className="text-3xl font-black text-gray-900">{stats.completedToday}</p>
-          <div className="flex items-center space-x-1 mt-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-            <p className="text-[10px] text-gray-400 font-bold">Tickets finalizados</p>
-          </div>
-        </div>
+        ))}
       </div>
 
-      {/* Control Bar (Buscador ahora es local para el agente) */}
-      <div className="bg-white p-2.5 rounded-3xl border border-gray-200 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+      {/* Toolbar */}
+      <div className="bg-white p-2.5 rounded-[2rem] border border-gray-200 flex flex-wrap items-center justify-between gap-4 shadow-sm">
         <div className="flex bg-gray-50 p-1 rounded-2xl">
-          <button 
-            onClick={() => setActiveTab('queue')}
-            className={`px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center space-x-3 ${activeTab === 'queue' ? 'bg-white text-[#5b5fc7] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-          >
-            <ListFilter size={16} />
-            <span>Cola Activa</span>
+          <button onClick={() => setActiveTab('queue')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center space-x-2 ${activeTab === 'queue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>
+            <ListFilter size={14}/><span>Cola Activa</span>
           </button>
-          <button 
-            onClick={() => setActiveTab('history')}
-            className={`px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center space-x-3 ${activeTab === 'history' ? 'bg-white text-[#5b5fc7] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-          >
-            <History size={16} />
-            <span>Historial</span>
+          <button onClick={() => setActiveTab('history')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center space-x-2 ${activeTab === 'history' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>
+            <History size={14}/><span>Historial</span>
+          </button>
+          <button onClick={() => setActiveTab('settings')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center space-x-2 ${activeTab === 'settings' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>
+            <Settings size={14}/><span>Configuración</span>
           </button>
         </div>
         
         <div className="flex items-center space-x-3 flex-1 max-w-md">
-          <div className="flex items-center bg-gray-50 rounded-2xl px-5 py-2.5 w-full border border-gray-100 focus-within:bg-white focus-within:border-indigo-300 transition-all">
-            <Search size={16} className="text-gray-400 mr-3" />
-            <input 
-              type="text" 
-              placeholder="Filtrar por nombre o ticket..." 
-              className="bg-transparent border-none outline-none text-xs w-full font-bold text-gray-700"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+          <div className="flex items-center bg-gray-50 rounded-2xl px-5 py-2.5 w-full border border-gray-100 focus-within:bg-white focus-within:border-indigo-200 transition-all">
+            <Search size={14} className="text-gray-400 mr-3" />
+            <input type="text" placeholder="Buscar ticket o usuario..." className="bg-transparent border-none outline-none text-xs font-bold w-full text-gray-700" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
-          {activeTab === 'history' && (
-            <button 
-              onClick={exportToCSV}
-              className="p-3 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-2xl transition-all"
-              title="Descargar CSV"
-            >
-              <Download size={20} />
-            </button>
+          {activeTab === 'queue' && (
+            <div className="flex bg-gray-100 p-1 rounded-xl shrink-0">
+              <button onClick={() => setViewMode('standard')} className={`p-2 rounded-lg transition-all ${viewMode === 'standard' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-400'}`} title="Vista Estándar"><List size={16}/></button>
+              <button onClick={() => setViewMode('compact')} className={`p-2 rounded-lg transition-all ${viewMode === 'compact' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-400'}`} title="Vista Grilla"><LayoutGrid size={16}/></button>
+            </div>
           )}
         </div>
       </div>
 
       {activeTab === 'queue' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-          {/* Active Work Column */}
-          <div className="space-y-5">
-            <div className="flex items-center justify-between px-2">
-              <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.25em] flex items-center space-x-2">
-                <Zap size={12} className="text-indigo-500" />
-                <span>Casos en Atención ({inProgress.length})</span>
-              </h3>
-            </div>
+        <div className={viewMode === 'compact' ? "grid grid-cols-1 md:grid-cols-3 gap-6 items-start" : "grid grid-cols-1 lg:grid-cols-2 gap-10 items-start"}>
+          
+          {/* En Atención */}
+          <div className="space-y-4">
+            <h3 className="text-[11px] font-black text-indigo-500 uppercase tracking-widest px-2">En Atención ({inProgress.length})</h3>
             {inProgress.map(req => (
-              <div key={req.id} className="bg-white border-2 border-indigo-100 rounded-[2rem] p-6 shadow-xl shadow-indigo-50/20 animate-in slide-in-from-left-4">
+              <div key={req.id} className="bg-white border-2 border-indigo-100 rounded-[2rem] p-5 shadow-lg animate-in slide-in-from-left-4">
                 <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white text-lg font-black shadow-lg">
-                      {req.userName.charAt(0)}
-                    </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black">{req.userName.charAt(0)}</div>
                     <div>
-                      <h4 className="text-sm font-black text-gray-900">{req.userName}</h4>
-                      <p className="text-[10px] text-indigo-500 font-black tracking-widest uppercase mt-0.5">Ticket {req.id}</p>
+                      <h4 className="text-xs font-black text-gray-900 leading-tight">{req.userName}</h4>
+                      <p className="text-[9px] text-indigo-400 font-bold uppercase mt-1">Ticket {req.id}</p>
                     </div>
                   </div>
-                  <div className="flex flex-col space-y-2">
-                    <button 
-                      onClick={() => onUpdateStatus(req.id, 'completed')}
-                      className="group flex items-center justify-center space-x-2 bg-emerald-50 text-emerald-600 px-4 py-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all font-black text-[9px]"
-                    >
-                      <CheckCircle size={12} />
-                      <span>SOLUCIONADO</span>
-                    </button>
-                    <div className="flex space-x-2">
-                      <button 
-                        onClick={() => onUpdateStatus(req.id, 'cancelled')}
-                        className="flex-1 flex items-center justify-center bg-red-50 text-red-600 p-2 rounded-xl hover:bg-red-600 hover:text-white transition-all"
-                        title="No solucionado"
-                      >
-                        <XCircle size={14} />
-                      </button>
-                      <button 
-                        onClick={() => onUpdateStatus(req.id, 'waiting')}
-                        className="flex-1 flex items-center justify-center bg-amber-50 text-amber-600 p-2 rounded-xl hover:bg-amber-600 hover:text-white transition-all"
-                        title="Volver a cola"
-                      >
-                        <RefreshCcw size={14} />
-                      </button>
-                    </div>
-                  </div>
+                  <button onClick={() => onUpdateStatus(req.id, 'completed')} className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"><CheckCircle size={18}/></button>
                 </div>
-                
-                <div className="bg-gray-50/80 p-4 rounded-2xl mb-4 border border-gray-100">
-                  <p className="text-xs font-black text-gray-800 leading-tight">{req.subject}</p>
-                  <div className="mt-2 flex items-center justify-between">
-                    <span className="inline-flex items-center space-x-1 text-[9px] font-black bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-lg uppercase">
-                      {getCategoryIcon(req.category)}
-                      <span>{req.category || 'General'}</span>
-                    </span>
-                    <button 
-                      onClick={() => toggleExpand(req.id)}
-                      className="text-[9px] font-black text-gray-400 hover:text-indigo-600 flex items-center space-x-1 uppercase"
-                    >
-                      <span>{expandedTickets[req.id] ? 'Ocultar Detalle' : 'Ver Detalle'}</span>
-                      {expandedTickets[req.id] ? <ChevronUp size={10}/> : <ChevronDown size={10}/>}
-                    </button>
-                  </div>
-                  
-                  {expandedTickets[req.id] && (
-                    <div className="mt-3 pt-3 border-t border-gray-200 text-[11px] text-gray-600 font-medium leading-relaxed animate-in slide-in-from-top-2">
-                      {req.description || "Sin descripción adicional."}
-                      {req.aiSummary && (
-                        <div className="mt-2 p-2 bg-indigo-50/50 rounded-lg text-indigo-700 font-bold border border-indigo-50">
-                          <span className="text-[9px] font-black block uppercase text-indigo-400 mb-0.5">Resumen caso (IA):</span>
-                          {req.aiSummary}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between pt-2 border-t border-gray-50">
-                  <div className="flex items-center space-x-4">
-                    <span className="text-[10px] font-black text-indigo-400 flex items-center space-x-1.5 bg-indigo-50/50 px-3 py-1.5 rounded-xl">
-                      <Clock size={12} />
-                      <span>{getElapsedTime(req.startedAt || req.createdAt)}</span>
-                    </span>
-                  </div>
-                  <button 
-                    onClick={() => openTeamsChat(req.userId, req.id)}
-                    className="flex items-center space-x-2 text-[10px] font-black text-[#5b5fc7] hover:bg-[#5b5fc7] hover:text-white px-4 py-2 rounded-xl transition-all uppercase tracking-widest border border-[#5b5fc7]/20"
-                  >
-                    <MessageCircle size={14} />
-                    <span>Contactar</span>
-                  </button>
+                <p className="text-[11px] font-black text-gray-700 line-clamp-2 mb-4 px-1">{req.subject}</p>
+                <div className="flex items-center justify-between pt-4 border-t border-gray-50">
+                  <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-3 py-1 rounded-lg">{getElapsedTime(req.startedAt || req.createdAt)}</span>
+                  <button onClick={() => openTeamsChat(req.userId, req.id)} className="text-[10px] font-black text-indigo-600 hover:bg-indigo-50 px-3 py-1 rounded-lg uppercase">Contactar</button>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Queue Column */}
-          <div className="space-y-5">
-             <div className="flex items-center justify-between px-2">
-              <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.25em] flex items-center space-x-2">
-                <ListFilter size={12} className="text-amber-500" />
-                <span>Lista de Espera ({waiting.length})</span>
-              </h3>
-            </div>
-            {waiting.map((req, idx) => (
-              <div key={req.id} className={`bg-white rounded-[2rem] p-6 border-2 transition-all hover:scale-[1.01] animate-in slide-in-from-right-4 ${
-                req.priority === 'high' ? 'border-red-100 shadow-red-50 shadow-xl' : 'border-gray-50 shadow-lg shadow-gray-100/40'
-              }`}>
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center space-x-4">
-                    <span className="text-3xl font-black text-gray-100 select-none">#{idx + 1}</span>
-                    <div>
-                      <h4 className="text-sm font-black text-gray-900 leading-none mb-1">{req.userName}</h4>
-                      <div className="flex items-center space-x-2">
-                        <span className={`text-[8px] px-2 py-0.5 rounded-md font-black uppercase tracking-widest ${
-                          req.priority === 'high' ? 'bg-red-500 text-white shadow-lg' : 
-                          req.priority === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
-                        }`}>
-                          {req.priority}
-                        </span>
-                      </div>
-                    </div>
+          {/* En Espera */}
+          <div className={viewMode === 'compact' ? "md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-5"}>
+            <h3 className="text-[11px] font-black text-amber-500 uppercase tracking-widest px-2 col-span-full">Lista de Espera ({waiting.length})</h3>
+            {waiting.map(req => (
+              <div key={req.id} className={`bg-white rounded-[2rem] p-5 border-2 animate-in slide-in-from-right-4 ${req.priority === 'high' ? 'border-red-100' : 'border-gray-50 shadow-sm'}`}>
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <h4 className="text-xs font-black text-gray-900 mb-1">{req.userName}</h4>
+                    <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase ${req.priority === 'high' ? 'bg-red-500 text-white' : 'bg-amber-100 text-amber-700'}`}>{req.priority}</span>
                   </div>
-                  <button 
-                    onClick={() => onUpdateStatus(req.id, 'in-progress')}
-                    className="bg-[#5b5fc7] text-white text-[10px] font-black px-6 py-3 rounded-2xl hover:shadow-2xl hover:shadow-indigo-200 transition-all active:scale-95 tracking-[0.1em]"
-                  >
-                    TOMAR CASO
-                  </button>
+                  <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className="bg-indigo-600 text-white text-[9px] font-black px-4 py-2 rounded-xl shadow-lg">TOMAR</button>
                 </div>
                 {req.aiSummary && (
-                  <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-50">
-                    <p className="text-[11px] text-amber-900 leading-snug font-bold">
-                      <span className="text-amber-600 font-black uppercase tracking-tighter mr-2">Resumen caso:</span>
-                      {req.aiSummary}
+                  <div className="bg-amber-50/50 p-3 rounded-xl mb-3">
+                    <p className="text-[10px] text-amber-900 font-bold leading-snug">
+                      <span className="text-amber-600 font-black uppercase mr-1">Resumen caso:</span>{req.aiSummary}
                     </p>
                   </div>
                 )}
-                <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between">
-                   <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Recibido {new Date(Number(req.createdAt)).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                   <button 
-                    onClick={() => toggleExpand(req.id)}
-                    className="text-[9px] font-black text-indigo-400 hover:text-indigo-600 transition-colors uppercase tracking-widest"
-                   >
-                    {expandedTickets[req.id] ? 'Cerrar Detalles' : 'Ver Detalles'}
-                   </button>
-                </div>
-                {expandedTickets[req.id] && (
-                    <div className="mt-3 pt-3 border-t border-gray-100 text-[11px] text-gray-500 italic animate-in slide-in-from-top-2">
-                      {req.description || "El usuario no proporcionó detalles adicionales."}
-                    </div>
-                )}
+                {viewMode === 'standard' && <p className="text-[10px] text-gray-500 italic line-clamp-3">{req.description || "Sin detalles."}</p>}
               </div>
             ))}
           </div>
         </div>
+      ) : activeTab === 'settings' ? (
+        <div className="max-w-3xl mx-auto space-y-8 animate-in zoom-in-95">
+          <div className="bg-white p-8 md:p-12 rounded-[3rem] border border-gray-100 shadow-2xl">
+            <h3 className="text-xl font-black text-gray-900 mb-8 flex items-center space-x-3">
+              <Settings className="text-indigo-600" /><span>Gestión de Agentes de TI</span>
+            </h3>
+            <div className="flex flex-col sm:flex-row gap-3 mb-10">
+              <input type="email" placeholder="correo@empresa.com" className="flex-1 bg-gray-50 border-2 border-transparent focus:border-indigo-500 rounded-2xl px-6 py-4 outline-none font-bold text-sm" value={newAgentEmail} onChange={e => setNewAgentEmail(e.target.value)} />
+              <button onClick={() => { if(newAgentEmail) { onManageAgent('add', newAgentEmail); setNewAgentEmail(''); }}} className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center space-x-2">
+                <Plus size={16}/><span>Autorizar</span>
+              </button>
+            </div>
+            <div className="space-y-3">
+              {agents.map(email => (
+                <div key={email} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 group">
+                  <span className="text-sm font-bold text-gray-700">{email}</span>
+                  <button onClick={() => onManageAgent('remove', email)} className="text-red-400 hover:text-red-600 p-2 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={18}/></button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       ) : (
-        <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-2xl shadow-gray-200/40">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-gray-50/80 border-b border-gray-100">
-                  <th className="p-6 font-black text-gray-400 uppercase tracking-[0.15em] text-[10px]">Ticket & Usuario</th>
-                  <th className="p-6 font-black text-gray-400 uppercase tracking-[0.15em] text-[10px]">Asunto</th>
-                  <th className="p-6 font-black text-gray-400 uppercase tracking-[0.15em] text-[10px]">Agente</th>
-                  <th className="p-6 font-black text-gray-400 uppercase tracking-[0.15em] text-[10px]">Estado / Categoría</th>
-                  <th className="p-6 font-black text-gray-400 uppercase tracking-[0.15em] text-[10px]">Cierre</th>
-                </tr>
-              </thead>
+        /* History Table */
+        <div className="bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden shadow-sm">
+           <table className="w-full text-left text-xs border-collapse">
+              <thead><tr className="bg-gray-50 border-b border-gray-100"><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Usuario / Ticket</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Asunto</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Atendido por</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Cierre</th></tr></thead>
               <tbody className="divide-y divide-gray-50">
                 {completed.map(req => (
-                  <tr key={req.id} className="hover:bg-indigo-50/20 transition-colors">
-                    <td className="p-6">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-gray-500 font-black">
-                          {req.userName.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="font-black text-gray-900">{req.userName}</p>
-                          <p className="text-[10px] text-gray-400 font-mono">ID: {req.id}</p>
-                        </div>
-                      </div>
-                    </td>
+                  <tr key={req.id} className="hover:bg-indigo-50/10 transition-colors">
+                    <td className="p-6"><p className="font-black text-gray-900">{req.userName}</p><p className="text-[10px] text-gray-400 font-mono">{req.id}</p></td>
                     <td className="p-6 font-bold text-gray-600 max-w-xs truncate">{req.subject}</td>
-                    <td className="p-6">
-                      <div className="flex items-center space-x-2">
-                        <User size={12} className="text-gray-400" />
-                        <span className="font-black text-gray-700">{req.agentName || 'N/A'}</span>
-                      </div>
-                    </td>
-                    <td className="p-6">
-                      <div className="flex flex-col space-y-1.5">
-                        <span className={`w-fit px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest ${
-                          req.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-                        }`}>
-                          {req.status === 'completed' ? 'RESUELTO' : 'NO SOLUCIONADO'}
-                        </span>
-                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">{req.category || 'GENERAL'}</span>
-                      </div>
-                    </td>
-                    <td className="p-6">
-                      <p className="text-gray-900 font-black">{req.completedAt ? new Date(Number(req.completedAt)).toLocaleTimeString() : '-'}</p>
-                      <p className="text-[10px] text-gray-400 font-bold">{req.completedAt ? new Date(Number(req.completedAt)).toLocaleDateString() : ''}</p>
-                    </td>
+                    <td className="p-6 font-black text-gray-700">{req.agentName || 'N/A'}</td>
+                    <td className="p-6 text-gray-400">{req.completedAt ? new Date(Number(req.completedAt)).toLocaleDateString() : '-'}</td>
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
+           </table>
         </div>
       )}
     </div>
