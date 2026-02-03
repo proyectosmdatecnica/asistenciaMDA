@@ -6,7 +6,7 @@ import UserRequestView from './components/UserRequestView';
 import HelpModal from './components/HelpModal';
 import { SupportRequest, QueueStats, AppRole } from './types';
 import { storageService } from './services/dataService';
-import { Loader2, RefreshCw, Wifi, WifiOff, Activity, ShieldAlert, CheckCircle2, AlertCircle, Terminal } from 'lucide-react';
+import { Loader2, RefreshCw, Wifi, WifiOff, Activity, ShieldAlert, CheckCircle2, AlertCircle } from 'lucide-react';
 
 const App: React.FC = () => {
   const [role, setRole] = useState<AppRole>('user');
@@ -19,18 +19,13 @@ const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [lastSyncStatus, setLastSyncStatus] = useState<'online' | 'offline'>('online');
-  const [lastError, setLastError] = useState<string | null>(null);
-  const [showDebug, setShowDebug] = useState(false);
   const [countdown, setCountdown] = useState(15);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   
   const prevWaitingCount = useRef(0);
 
   const refreshData = useCallback(async (silent = false) => {
-    if (!silent) {
-      setIsSyncing(true);
-      setLastError(null);
-    }
+    if (!silent) setIsSyncing(true);
     try {
       const [data, agents] = await Promise.all([
         storageService.fetchAllRequests(),
@@ -40,16 +35,14 @@ const App: React.FC = () => {
       setAuthorizedAgents(agents);
       setRequests(data);
       setLastSyncStatus('online');
-      setLastError(null);
       setCountdown(15);
 
       if (agents.some(a => a.toLowerCase() === currentUserId.toLowerCase())) {
         setRole('agent');
       }
     } catch (e: any) {
-      console.error("Sync Error Details:", e);
+      console.error("Sync Error:", e);
       setLastSyncStatus('offline');
-      setLastError(e.message || "Error desconocido de conexión");
     } finally {
       if (!silent) setIsSyncing(false);
       setIsInitialLoading(false);
@@ -130,7 +123,7 @@ const App: React.FC = () => {
       }
       refreshData(true);
     } catch (e: any) {
-      window.alert("No se pudo guardar: " + e.message);
+      window.alert("No se pudo guardar la solicitud.");
     } finally {
       setIsSyncing(false);
     }
@@ -143,7 +136,7 @@ const App: React.FC = () => {
       await storageService.updateRequestStatus(id, newStatus, agentData);
       refreshData(true);
     } catch (e: any) {
-      window.alert("Error al actualizar estado: " + e.message);
+      window.alert("Error al actualizar el ticket.");
     } finally {
       setIsSyncing(false);
     }
@@ -161,8 +154,7 @@ const App: React.FC = () => {
           window.alert("¡Registro exitoso! Ahora eres agente de TI.");
         }
       } catch (err: any) {
-        console.error("Critical Register Error:", err);
-        window.alert("FALLO CRÍTICO: " + err.message);
+        window.alert("No se pudo registrar el agente.");
       } finally {
         setIsRegistering(false);
       }
@@ -172,7 +164,7 @@ const App: React.FC = () => {
         await storageService.removeAgent(targetEmail);
         await refreshData();
       } catch (e: any) {
-        window.alert("Error: " + e.message);
+        window.alert("Error al eliminar agente.");
       } finally {
         setIsSyncing(false);
       }
@@ -194,31 +186,15 @@ const App: React.FC = () => {
     <Layout role={role} onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')} onOpenHelp={() => setIsHelpOpen(true)}>
       <div className="relative min-h-full pb-20">
         
-        {/* Banner de error con diagnóstico */}
+        {/* Banner de error simplificado */}
         {lastSyncStatus === 'offline' && (
           <div className="max-w-4xl mx-auto mb-8 animate-in slide-in-from-top-4">
-            <div className="bg-red-600 text-white p-5 rounded-[2rem] shadow-2xl flex flex-col space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <AlertCircle size={20} />
-                  <span className="text-xs font-black uppercase tracking-widest">Error de conexión con el servidor</span>
-                </div>
-                <button 
-                  onClick={() => setShowDebug(!showDebug)}
-                  className="bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center space-x-1"
-                >
-                  <Terminal size={12} />
-                  <span>{showDebug ? 'Ocultar detalles' : 'Ver detalles técnicos'}</span>
-                </button>
+            <div className="bg-red-600 text-white px-6 py-4 rounded-[1.5rem] shadow-2xl flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <AlertCircle size={20} />
+                <span className="text-xs font-black uppercase tracking-widest">Error de sincronización con el servidor</span>
               </div>
-              {showDebug && (
-                <div className="bg-black/20 p-4 rounded-2xl font-mono text-[10px] break-all border border-white/10">
-                  <p className="mb-1 text-red-200">Mensaje: {lastError}</p>
-                  <p className="text-gray-300">Usuario: {currentUserId}</p>
-                  <p className="text-gray-300">Endpoint: /api/agents</p>
-                  <p className="mt-2 text-yellow-200 uppercase text-[8px] font-bold">Verifica el Firewall de SQL en Azure o el SqlConnectionString.</p>
-                </div>
-              )}
+              <button onClick={() => refreshData()} className="text-[10px] font-black uppercase bg-white/20 px-4 py-2 rounded-xl hover:bg-white/30 transition-all">Reintentar</button>
             </div>
           </div>
         )}
@@ -232,9 +208,9 @@ const App: React.FC = () => {
                   {isRegistering ? <Loader2 size={24} className="animate-spin" /> : <ShieldAlert size={24} />}
                 </div>
                 <div>
-                  <h4 className="font-black text-sm uppercase tracking-widest">Configuración Inicial Requerida</h4>
+                  <h4 className="font-black text-sm uppercase tracking-widest">Configuración Requerida</h4>
                   <p className="text-xs font-bold opacity-80">
-                    {isRegistering ? 'Procesando registro...' : 'No hay agentes de TI registrados en el sistema todavía.'}
+                    {isRegistering ? 'Procesando registro...' : 'No hay agentes de TI registrados en el sistema.'}
                   </p>
                 </div>
               </div>
@@ -243,8 +219,8 @@ const App: React.FC = () => {
                 onClick={() => handleAgentManagement('add', currentUserId)}
                 className={`bg-white text-amber-700 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-lg flex items-center space-x-2 ${isRegistering ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100 active:scale-95'}`}
               >
-                {isRegistering ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
-                <span>{isRegistering ? 'Registrando...' : 'Registrarme como Agente'}</span>
+                {isRegistering ? <Loader2 size={12} className="animate-spin" /> : <ShieldAlert size={12} />}
+                <span>{isRegistering ? 'Registrarme como Agente' : 'Registrarme como Agente'}</span>
               </button>
             </div>
           </div>
