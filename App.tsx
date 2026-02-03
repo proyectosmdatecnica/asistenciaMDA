@@ -8,17 +8,14 @@ import { SupportRequest, QueueStats, AppRole } from './types';
 import { storageService } from './services/dataService';
 import { Loader2, RefreshCw, Wifi, WifiOff, Activity } from 'lucide-react';
 
-const AUTHORIZED_AGENTS = [
-  'mbozzone@intecsoft.com.ar',
-  'ftokashiki@intecsoft.com.ar'
-];
-
 const App: React.FC = () => {
   const [role, setRole] = useState<AppRole>('user');
   const [requests, setRequests] = useState<SupportRequest[]>([]);
+  const [authorizedAgents, setAuthorizedAgents] = useState<string[]>([]);
   const [currentUserId, setCurrentUserId] = useState('user-guest');
   const [currentUserName, setCurrentUserName] = useState('Usuario Invitado');
   const [isTeamsReady, setIsTeamsReady] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncStatus, setLastSyncStatus] = useState<'online' | 'offline'>('online');
   const [countdown, setCountdown] = useState(15);
@@ -29,8 +26,21 @@ const App: React.FC = () => {
   const refreshData = useCallback(async (silent = false) => {
     if (!silent) setIsSyncing(true);
     try {
-      const data = await storageService.fetchAllRequests();
+      const [data, agents] = await Promise.all([
+        storageService.fetchAllRequests(),
+        storageService.fetchAgents()
+      ]);
       
+      setAuthorizedAgents(agents);
+      setRequests(data);
+      setLastSyncStatus('online');
+      setCountdown(15);
+
+      // Si el usuario actual está en la lista de agentes, cambiar rol automáticamente
+      if (agents.some(a => a.toLowerCase() === currentUserId.toLowerCase())) {
+        setRole('agent');
+      }
+
       if (role === 'agent') {
         const currentWaiting = data.filter(r => r.status === 'waiting').length;
         if (currentWaiting > prevWaitingCount.current) {
@@ -38,58 +48,57 @@ const App: React.FC = () => {
             const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
             audio.volume = 0.4;
             audio.play().catch(() => {});
-          } catch (e) {}
+          } catch(e) {}
         }
         prevWaitingCount.current = currentWaiting;
       }
-
-      setRequests(data);
-      setLastSyncStatus('online');
-      setCountdown(15);
     } catch (e) {
       setLastSyncStatus('offline');
     } finally {
       if (!silent) setIsSyncing(false);
+      setIsInitialLoading(false);
     }
-  }, [role]);
+  }, [role, currentUserId]);
 
-  // Efecto para inicializar Teams y cargar datos iniciales una vez resuelto el ID
   useEffect(() => {
-    const init = async () => {
+    const initTeams = async () => {
+      // Timeout de seguridad: Si Teams no responde en 3s, procedemos
+      const sdkTimeout = setTimeout(() => {
+        if (!isTeamsReady) {
+          console.warn("Teams SDK Init Timeout - Proceeding as guest/browser");
+          setIsTeamsReady(true);
+        }
+      }, 3000);
+
       try {
         const teams = (window as any).microsoftTeams;
         if (teams) {
           await teams.app.initialize();
           const context = await teams.app.getContext();
-          
           if (context.user?.userPrincipalName) {
             const upn = context.user.userPrincipalName.toLowerCase();
             setCurrentUserId(upn);
             setCurrentUserName(context.user.displayName || upn);
-            
-            if (AUTHORIZED_AGENTS.some(a => a.toLowerCase() === upn)) {
-              setRole('agent');
-            }
           }
         }
       } catch (e) {
-        console.error("Teams Init Error", e);
+        console.error("Teams Init Error:", e);
       } finally {
+        clearTimeout(sdkTimeout);
         setIsTeamsReady(true);
-        // Disparar carga de datos inmediata tras resolver identidad
-        refreshData();
       }
     };
-    init();
-  }, []); // Solo al montar una vez
+    initTeams();
+  }, []);
 
-  // Refrescar datos cuando cambie el ID de usuario (caso de persistencia)
+  // REFRESH DATA cuando el SDK esté listo O cuando el usuario cambie (Persistencia)
   useEffect(() => {
-    if (currentUserId !== 'user-guest') {
-      refreshData(true);
+    if (isTeamsReady) {
+      refreshData();
     }
-  }, [currentUserId, refreshData]);
+  }, [isTeamsReady, currentUserId, refreshData]);
 
+  // Timer de refresco automático
   useEffect(() => {
     const interval = setInterval(() => {
       setCountdown(prev => {
@@ -106,28 +115,17 @@ const App: React.FC = () => {
   const stats = useMemo<QueueStats>(() => {
     const completed = requests.filter(r => r.status === 'completed');
     const active = requests.filter(r => r.status === 'waiting' || r.status === 'in-progress');
-    
     let avgMins = 5;
     if (completed.length > 0) {
-      const totalWait = completed.reduce((acc, curr) => {
-        const end = curr.startedAt || curr.completedAt || Date.now();
-        return acc + (Number(end) - Number(curr.createdAt));
-      }, 0);
+      const totalWait = completed.reduce((acc, curr) => acc + (Number(curr.startedAt || curr.completedAt || Date.now()) - Number(curr.createdAt)), 0);
       avgMins = Math.max(2, Math.round((totalWait / completed.length) / 60000));
     }
-
-    return {
-      averageWaitTime: avgMins,
-      completedToday: completed.length,
-      activeRequests: active.length
-    };
+    return { averageWaitTime: avgMins, completedToday: completed.length, activeRequests: active.length };
   }, [requests]);
 
   const handleCreateOrUpdate = useCallback(async (data: Partial<SupportRequest>, id?: string) => {
     setIsSyncing(true);
     let success = false;
-
-    // IMPORTANTE: Si hay ID, es una actualización (PATCH), si no, es creación (POST)
     if (id) {
       success = await storageService.updateRequestStatus(id, 'waiting', {
         subject: data.subject,
@@ -135,92 +133,68 @@ const App: React.FC = () => {
         priority: data.priority
       });
     } else {
-      const newRequest: any = {
-        userId: currentUserId,
-        userName: currentUserName,
-        subject: data.subject,
-        description: data.description,
-        priority: data.priority,
-        aiSummary: data.aiSummary,
-        category: data.category
-      };
-      success = await storageService.saveRequest(newRequest);
+      success = await storageService.saveRequest({ ...data, userId: currentUserId, userName: currentUserName });
     }
-    
-    if (success) {
-      // Esperar un breve instante para que la DB asiente antes de refrescar
-      setTimeout(() => refreshData(true), 500);
-    }
+    if (success) refreshData(true);
     setIsSyncing(false);
   }, [currentUserId, currentUserName, refreshData]);
 
   const handleUpdateStatus = useCallback(async (id: string, newStatus: SupportRequest['status']) => {
     setIsSyncing(true);
-    const agentData = newStatus === 'in-progress' ? { 
-      agentId: currentUserId, 
-      agentName: currentUserName 
-    } : {};
-
-    const success = await storageService.updateRequestStatus(id, newStatus, agentData);
-    if (success) refreshData(true);
+    const agentData = newStatus === 'in-progress' ? { agentId: currentUserId, agentName: currentUserName } : {};
+    if (await storageService.updateRequestStatus(id, newStatus, agentData)) refreshData(true);
     setIsSyncing(false);
   }, [currentUserId, currentUserName, refreshData]);
+
+  const handleAgentManagement = async (action: 'add' | 'remove', email: string) => {
+    setIsSyncing(true);
+    if (action === 'add') await storageService.addAgent(email);
+    else await storageService.removeAgent(email);
+    await refreshData();
+    setIsSyncing(false);
+  };
 
   const activeRequestsForUser = useMemo(() => 
     requests.filter(r => r.userId === currentUserId && (r.status === 'waiting' || r.status === 'in-progress'))
   , [requests, currentUserId]);
 
-  const getQueuePosition = useCallback((id: string) => {
-    const waitingList = requests
-      .filter(r => r.status === 'waiting')
-      .sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
-    return waitingList.findIndex(r => r.id === id) + 1;
-  }, [requests]);
-
-  if (!isTeamsReady) {
-    return (
-      <div className="h-screen w-full flex items-center justify-center bg-gray-50">
-        <Loader2 className="animate-spin text-[#5b5fc7]" size={40} />
-      </div>
-    );
-  }
+  if (!isTeamsReady) return (
+    <div className="h-screen w-full flex flex-col items-center justify-center bg-[#f5f5f5] space-y-4">
+      <Loader2 className="animate-spin text-[#5b5fc7]" size={40} />
+      <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Iniciando aplicación IT...</p>
+    </div>
+  );
 
   return (
-    <Layout 
-      role={role} 
-      onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')}
-      onOpenHelp={() => setIsHelpOpen(true)}
-    >
+    <Layout role={role} onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')} onOpenHelp={() => setIsHelpOpen(true)}>
       <div className="relative min-h-full pb-20">
-        <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-3 bg-white px-5 py-3 rounded-full shadow-2xl border border-gray-100 text-[11px] font-black group transition-all">
+        <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-3 bg-white px-5 py-3 rounded-full shadow-2xl border border-gray-100 text-[11px] font-black">
           <div className="relative">
             {lastSyncStatus === 'online' ? <Wifi size={14} className="text-emerald-500" /> : <WifiOff size={14} className="text-red-500" />}
             {isSyncing && <Activity size={10} className="absolute -top-1 -right-1 text-indigo-500 animate-pulse" />}
           </div>
-          <span className="text-gray-400 uppercase tracking-widest">
-            {isSyncing ? 'Sincronizando' : `Refresco en ${countdown}s`}
-          </span>
-          <button onClick={() => refreshData()} className="p-1.5 hover:bg-gray-100 rounded-full">
-            <RefreshCw size={12} className="text-indigo-400" />
-          </button>
+          <span className="text-gray-400 uppercase tracking-widest">{isSyncing ? 'Sincronizando' : `Refresco en ${countdown}s`}</span>
+          <button onClick={() => refreshData()} className="p-1.5 hover:bg-gray-100 rounded-full"><RefreshCw size={12} className="text-indigo-400" /></button>
         </div>
 
         {role === 'agent' ? (
           <AgentDashboard 
             requests={requests} 
             stats={stats} 
-            onUpdateStatus={handleUpdateStatus} 
+            onUpdateStatus={handleUpdateStatus}
+            agents={authorizedAgents}
+            onManageAgent={handleAgentManagement}
           />
         ) : (
           <UserRequestView 
             activeRequests={activeRequestsForUser}
-            queuePosition={getQueuePosition}
+            isLoading={isInitialLoading}
+            queuePosition={(id) => requests.filter(r => r.status === 'waiting').sort((a,b) => Number(a.createdAt)-Number(b.createdAt)).findIndex(r => r.id === id) + 1}
             averageWaitTime={stats.averageWaitTime}
             onSubmit={handleCreateOrUpdate}
             onCancel={(id) => handleUpdateStatus(id, 'cancelled')}
           />
         )}
-
         <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
       </div>
     </Layout>
