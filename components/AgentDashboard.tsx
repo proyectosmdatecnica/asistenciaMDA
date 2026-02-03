@@ -12,8 +12,6 @@ import {
   Globe,
   Key,
   Download,
-  ExternalLink,
-  ShieldAlert,
   Zap,
   XCircle,
   RefreshCcw,
@@ -156,7 +154,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
         </div>
       </div>
 
-      {/* Control Bar */}
+      {/* Control Bar (Buscador ahora es local para el agente) */}
       <div className="bg-white p-2.5 rounded-3xl border border-gray-200 flex flex-wrap items-center justify-between gap-4 shadow-sm">
         <div className="flex bg-gray-50 p-1 rounded-2xl">
           <button 
@@ -268,7 +266,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       {req.description || "Sin descripción adicional."}
                       {req.aiSummary && (
                         <div className="mt-2 p-2 bg-indigo-50/50 rounded-lg text-indigo-700 font-bold border border-indigo-50">
-                          <span className="text-[9px] font-black block uppercase text-indigo-400 mb-0.5">Resumen IA:</span>
+                          <span className="text-[9px] font-black block uppercase text-indigo-400 mb-0.5">Resumen caso (IA):</span>
                           {req.aiSummary}
                         </div>
                       )}
@@ -282,12 +280,6 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       <Clock size={12} />
                       <span>{getElapsedTime(req.startedAt || req.createdAt)}</span>
                     </span>
-                    {req.agentName && (
-                      <div className="flex items-center space-x-2 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100">
-                        <User size={10} className="text-indigo-400" />
-                        <span className="text-[9px] font-black text-indigo-700 truncate max-w-[100px]">{req.agentName}</span>
-                      </div>
-                    )}
                   </div>
                   <button 
                     onClick={() => openTeamsChat(req.userId, req.id)}
@@ -299,12 +291,6 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                 </div>
               </div>
             ))}
-            {inProgress.length === 0 && (
-              <div className="bg-gray-100/50 border-4 border-dotted border-gray-200 rounded-[2.5rem] py-20 text-center">
-                <ShieldAlert size={32} className="mx-auto text-gray-300 mb-4" />
-                <p className="text-gray-400 text-xs font-black uppercase tracking-widest">Sin actividad inmediata</p>
-              </div>
-            )}
           </div>
 
           {/* Queue Column */}
@@ -331,10 +317,6 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                         }`}>
                           {req.priority}
                         </span>
-                        <span className="flex items-center space-x-1 text-[9px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-md font-black">
-                          {getCategoryIcon(req.category)}
-                          <span>{req.category || 'GENERAL'}</span>
-                        </span>
                       </div>
                     </div>
                   </div>
@@ -348,7 +330,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                 {req.aiSummary && (
                   <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-50">
                     <p className="text-[11px] text-amber-900 leading-snug font-bold">
-                      <span className="text-amber-600 font-black uppercase tracking-tighter mr-2">Triaje:</span>
+                      <span className="text-amber-600 font-black uppercase tracking-tighter mr-2">Resumen caso:</span>
                       {req.aiSummary}
                     </p>
                   </div>
@@ -369,12 +351,6 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                 )}
               </div>
             ))}
-            {waiting.length === 0 && (
-              <div className="bg-emerald-50/50 border-4 border-dotted border-emerald-100 rounded-[2.5rem] py-20 text-center">
-                <CheckCircle size={32} className="mx-auto text-emerald-500 mb-4" />
-                <p className="text-emerald-600 text-xs font-black uppercase tracking-widest">¡Todo al día!</p>
-              </div>
-            )}
           </div>
         </div>
       ) : (
@@ -427,13 +403,6 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                     </td>
                   </tr>
                 ))}
-                {completed.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="p-20 text-center">
-                      <p className="text-gray-300 text-xs font-black uppercase tracking-widest">Sin registros históricos</p>
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
