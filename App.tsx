@@ -21,31 +21,27 @@ const App: React.FC = () => {
   
   const prevWaitingCount = useRef(0);
 
-  // Lógica de Sincronización del Badge de Teams (Círculo rojo en el icono)
-  useEffect(() => {
-    const updateTeamsBadge = () => {
-      const teams = (window as any).microsoftTeams;
-      if (isTeamsReady && teams?.app?.setBadgeCount) {
-        // Solo mostramos el badge si el usuario está en modo Agente
-        if (role === 'agent') {
-          const waitingCount = requests.filter(r => r.status === 'waiting').length;
-          try {
-            // Intentamos establecer el conteo. Si es 0, Teams quita el badge.
-            teams.app.setBadgeCount(waitingCount).catch((err: any) => {
-              console.debug("Error setting badge:", err);
-            });
-          } catch (e) {
-            console.debug("Badge API not available in this Teams environment");
-          }
-        } else {
-          // Si es usuario normal, limpiamos el badge
-          try { teams.app.setBadgeCount(0); } catch (e) {}
-        }
+  // Lógica optimizada del Badge de Teams
+  const updateTeamsBadge = useCallback((count: number) => {
+    const teams = (window as any).microsoftTeams;
+    if (isTeamsReady && teams?.app?.setBadgeCount) {
+      try {
+        // Solo enviamos badge si el usuario es agente. De lo contrario, lo limpiamos (0).
+        const finalCount = role === 'agent' ? count : 0;
+        teams.app.setBadgeCount(finalCount).catch((err: any) => {
+          console.debug("Badge Update Failed:", err);
+        });
+      } catch (e) {
+        console.debug("Badge API Exception:", e);
       }
-    };
+    }
+  }, [isTeamsReady, role]);
 
-    updateTeamsBadge();
-  }, [requests, isTeamsReady, role]);
+  // Efecto que reacciona a cambios en la lista de solicitudes
+  useEffect(() => {
+    const waitingCount = requests.filter(r => r.status === 'waiting').length;
+    updateTeamsBadge(waitingCount);
+  }, [requests, updateTeamsBadge]);
 
   const refreshData = useCallback(async (silent = false) => {
     if (!silent) setIsSyncing(true);
@@ -61,6 +57,9 @@ const App: React.FC = () => {
       setCountdown(15);
 
       const waitingCount = data.filter(r => r.status === 'waiting').length;
+
+      // Sincronización inmediata del badge tras refrescar datos
+      updateTeamsBadge(waitingCount);
 
       // Auto-cambio a rol de agente si el correo está autorizado
       if (agents.some(a => a.toLowerCase() === currentUserId.toLowerCase()) && role !== 'agent') {
@@ -81,7 +80,7 @@ const App: React.FC = () => {
     } finally {
       if (!silent) setIsSyncing(false);
     }
-  }, [role, currentUserId]);
+  }, [role, currentUserId, updateTeamsBadge]);
 
   useEffect(() => {
     const init = async () => {
@@ -95,12 +94,10 @@ const App: React.FC = () => {
             setCurrentUserId(upn);
             setCurrentUserName(context.user.displayName || upn);
           }
-          setIsTeamsReady(true);
-        } else {
-          setIsTeamsReady(true); // Fallback para navegador
         }
       } catch (e) {
         console.error("Teams Init Error", e);
+      } finally {
         setIsTeamsReady(true);
       }
     };
