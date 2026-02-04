@@ -21,6 +21,26 @@ const App: React.FC = () => {
   
   const prevWaitingCount = useRef(0);
 
+  // Efecto para actualizar el Badge de Teams cuando cambian los tickets
+  useEffect(() => {
+    const teams = (window as any).microsoftTeams;
+    if (isTeamsReady && teams?.app?.setBadgeCount) {
+      const waitingCount = requests.filter(r => r.status === 'waiting').length;
+      const isAgent = authorizedAgents.some(a => a.toLowerCase() === currentUserId.toLowerCase()) || role === 'agent';
+      
+      try {
+        // Solo mostramos el contador si el usuario tiene rol de agente
+        if (isAgent) {
+          teams.app.setBadgeCount(waitingCount);
+        } else {
+          teams.app.setBadgeCount(0); // Usuarios finales no ven badge
+        }
+      } catch (e) {
+        console.debug("Badge not supported/failed", e);
+      }
+    }
+  }, [requests, isTeamsReady, authorizedAgents, currentUserId, role]);
+
   const refreshData = useCallback(async (silent = false) => {
     if (!silent) setIsSyncing(true);
     try {
@@ -35,19 +55,6 @@ const App: React.FC = () => {
       setCountdown(15);
 
       const waitingCount = data.filter(r => r.status === 'waiting').length;
-
-      // Integración con Teams App Badging (Badge numérico en el icono de la app)
-      const teams = (window as any).microsoftTeams;
-      if (teams?.app?.isInitialized && teams.app.setBadgeCount) {
-        try {
-          // Solo mostrar badge si hay agentes autorizados o si el rol es agente
-          if (agents.includes(currentUserId.toLowerCase()) || role === 'agent') {
-            teams.app.setBadgeCount(waitingCount);
-          }
-        } catch (e) {
-          console.debug("Badge not supported in this scope");
-        }
-      }
 
       // Si el usuario actual está en la lista de agentes, cambiar rol automáticamente una sola vez
       if (agents.some(a => a.toLowerCase() === currentUserId.toLowerCase()) && role !== 'agent') {
