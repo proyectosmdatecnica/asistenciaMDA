@@ -21,25 +21,31 @@ const App: React.FC = () => {
   
   const prevWaitingCount = useRef(0);
 
-  // Efecto para actualizar el Badge de Teams cuando cambian los tickets
+  // Lógica de Sincronización del Badge de Teams (Círculo rojo en el icono)
   useEffect(() => {
-    const teams = (window as any).microsoftTeams;
-    if (isTeamsReady && teams?.app?.setBadgeCount) {
-      const waitingCount = requests.filter(r => r.status === 'waiting').length;
-      const isAgent = authorizedAgents.some(a => a.toLowerCase() === currentUserId.toLowerCase()) || role === 'agent';
-      
-      try {
-        // Solo mostramos el contador si el usuario tiene rol de agente
-        if (isAgent) {
-          teams.app.setBadgeCount(waitingCount);
+    const updateTeamsBadge = () => {
+      const teams = (window as any).microsoftTeams;
+      if (isTeamsReady && teams?.app?.setBadgeCount) {
+        // Solo mostramos el badge si el usuario está en modo Agente
+        if (role === 'agent') {
+          const waitingCount = requests.filter(r => r.status === 'waiting').length;
+          try {
+            // Intentamos establecer el conteo. Si es 0, Teams quita el badge.
+            teams.app.setBadgeCount(waitingCount).catch((err: any) => {
+              console.debug("Error setting badge:", err);
+            });
+          } catch (e) {
+            console.debug("Badge API not available in this Teams environment");
+          }
         } else {
-          teams.app.setBadgeCount(0); // Usuarios finales no ven badge
+          // Si es usuario normal, limpiamos el badge
+          try { teams.app.setBadgeCount(0); } catch (e) {}
         }
-      } catch (e) {
-        console.debug("Badge not supported/failed", e);
       }
-    }
-  }, [requests, isTeamsReady, authorizedAgents, currentUserId, role]);
+    };
+
+    updateTeamsBadge();
+  }, [requests, isTeamsReady, role]);
 
   const refreshData = useCallback(async (silent = false) => {
     if (!silent) setIsSyncing(true);
@@ -56,11 +62,12 @@ const App: React.FC = () => {
 
       const waitingCount = data.filter(r => r.status === 'waiting').length;
 
-      // Si el usuario actual está en la lista de agentes, cambiar rol automáticamente una sola vez
+      // Auto-cambio a rol de agente si el correo está autorizado
       if (agents.some(a => a.toLowerCase() === currentUserId.toLowerCase()) && role !== 'agent') {
         setRole('agent');
       }
 
+      // Sonido de alerta para nuevos tickets si el usuario es agente
       if (role === 'agent') {
         if (waitingCount > prevWaitingCount.current) {
           const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
@@ -88,10 +95,12 @@ const App: React.FC = () => {
             setCurrentUserId(upn);
             setCurrentUserName(context.user.displayName || upn);
           }
+          setIsTeamsReady(true);
+        } else {
+          setIsTeamsReady(true); // Fallback para navegador
         }
       } catch (e) {
         console.error("Teams Init Error", e);
-      } finally {
         setIsTeamsReady(true);
       }
     };
@@ -128,6 +137,16 @@ const App: React.FC = () => {
     return { averageWaitTime: avgMins, completedToday: completed.length, activeRequests: active.length };
   }, [requests]);
 
+  const handleUpdateStatus = useCallback(async (id: string, newStatus: SupportRequest['status']) => {
+    setIsSyncing(true);
+    const agentData = newStatus === 'in-progress' 
+      ? { agentId: currentUserId, agentName: currentUserName } 
+      : (newStatus === 'waiting' ? { agentId: '', agentName: '' } : {});
+      
+    if (await storageService.updateRequestStatus(id, newStatus, agentData)) refreshData(true);
+    setIsSyncing(false);
+  }, [currentUserId, currentUserName, refreshData]);
+
   const handleCreateOrUpdate = useCallback(async (data: Partial<SupportRequest>, id?: string) => {
     setIsSyncing(true);
     let success = false;
@@ -137,17 +156,6 @@ const App: React.FC = () => {
       success = await storageService.saveRequest({ ...data, userId: currentUserId, userName: currentUserName });
     }
     if (success) refreshData(true);
-    setIsSyncing(false);
-  }, [currentUserId, currentUserName, refreshData]);
-
-  const handleUpdateStatus = useCallback(async (id: string, newStatus: SupportRequest['status']) => {
-    setIsSyncing(true);
-    // Si vuelve a la cola, se limpian los datos del agente
-    const agentData = newStatus === 'in-progress' 
-      ? { agentId: currentUserId, agentName: currentUserName } 
-      : (newStatus === 'waiting' ? { agentId: '', agentName: '' } : {});
-      
-    if (await storageService.updateRequestStatus(id, newStatus, agentData)) refreshData(true);
     setIsSyncing(false);
   }, [currentUserId, currentUserName, refreshData]);
 
