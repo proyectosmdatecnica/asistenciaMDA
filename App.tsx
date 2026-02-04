@@ -37,7 +37,6 @@ const App: React.FC = () => {
         });
       }
       
-      // Alternativa: Actualizar título de pestaña (Teams a veces lo usa para la barra lateral)
       if (finalCount > 0) {
         document.title = `(${finalCount}) Soporte IT`;
       } else {
@@ -178,7 +177,6 @@ const App: React.FC = () => {
   return (
     <Layout 
       role={role} 
-      onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')} 
       onOpenHelp={() => setIsHelpOpen(true)}
       pendingCount={requests.filter(r => r.status === 'waiting').length}
     >
