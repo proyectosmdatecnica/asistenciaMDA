@@ -21,27 +21,33 @@ const App: React.FC = () => {
   
   const prevWaitingCount = useRef(0);
 
-  // Lógica optimizada del Badge de Teams
-  const updateTeamsBadge = useCallback((count: number) => {
+  // Lógica de Badge ultra-persistente para Agentes
+  const syncTeamsBadge = useCallback((count: number) => {
     const teams = (window as any).microsoftTeams;
-    if (isTeamsReady && teams?.app?.setBadgeCount) {
+    // Solo actuamos si el SDK está listo
+    if (isTeamsReady && teams?.app) {
+      const isAgent = authorizedAgents.some(a => a.toLowerCase() === currentUserId.toLowerCase()) || role === 'agent';
+      
       try {
-        // Solo enviamos badge si el usuario es agente. De lo contrario, lo limpiamos (0).
-        const finalCount = role === 'agent' ? count : 0;
-        teams.app.setBadgeCount(finalCount).catch((err: any) => {
-          console.debug("Badge Update Failed:", err);
-        });
-      } catch (e) {
-        console.debug("Badge API Exception:", e);
+        if (isAgent) {
+          // Si hay tickets, ponemos el número. Si no, 0 lo limpia.
+          if (teams.app.setBadgeCount) {
+            teams.app.setBadgeCount(count).catch((e: any) => console.debug("Teams Badge Error", e));
+          }
+        } else {
+          if (teams.app.setBadgeCount) teams.app.setBadgeCount(0);
+        }
+      } catch (err) {
+        console.debug("Badge API not accessible", err);
       }
     }
-  }, [isTeamsReady, role]);
+  }, [isTeamsReady, authorizedAgents, currentUserId, role]);
 
-  // Efecto que reacciona a cambios en la lista de solicitudes
+  // Actualizar cada vez que cambien las solicitudes o el rol
   useEffect(() => {
     const waitingCount = requests.filter(r => r.status === 'waiting').length;
-    updateTeamsBadge(waitingCount);
-  }, [requests, updateTeamsBadge]);
+    syncTeamsBadge(waitingCount);
+  }, [requests, syncTeamsBadge]);
 
   const refreshData = useCallback(async (silent = false) => {
     if (!silent) setIsSyncing(true);
@@ -58,15 +64,15 @@ const App: React.FC = () => {
 
       const waitingCount = data.filter(r => r.status === 'waiting').length;
 
-      // Sincronización inmediata del badge tras refrescar datos
-      updateTeamsBadge(waitingCount);
+      // Sincronización forzada inmediata
+      syncTeamsBadge(waitingCount);
 
       // Auto-cambio a rol de agente si el correo está autorizado
       if (agents.some(a => a.toLowerCase() === currentUserId.toLowerCase()) && role !== 'agent') {
         setRole('agent');
       }
 
-      // Sonido de alerta para nuevos tickets si el usuario es agente
+      // Alerta sonora para agentes
       if (role === 'agent') {
         if (waitingCount > prevWaitingCount.current) {
           const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
@@ -80,7 +86,7 @@ const App: React.FC = () => {
     } finally {
       if (!silent) setIsSyncing(false);
     }
-  }, [role, currentUserId, updateTeamsBadge]);
+  }, [role, currentUserId, syncTeamsBadge]);
 
   useEffect(() => {
     const init = async () => {
@@ -94,10 +100,12 @@ const App: React.FC = () => {
             setCurrentUserId(upn);
             setCurrentUserName(context.user.displayName || upn);
           }
+          setIsTeamsReady(true);
+        } else {
+          setIsTeamsReady(true); // Fallback Navegador
         }
       } catch (e) {
         console.error("Teams Init Error", e);
-      } finally {
         setIsTeamsReady(true);
       }
     };
@@ -171,7 +179,12 @@ const App: React.FC = () => {
   if (!isTeamsReady) return <div className="h-screen w-full flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-[#5b5fc7]" size={40} /></div>;
 
   return (
-    <Layout role={role} onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')} onOpenHelp={() => setIsHelpOpen(true)}>
+    <Layout 
+      role={role} 
+      onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')} 
+      onOpenHelp={() => setIsHelpOpen(true)}
+      pendingCount={requests.filter(r => r.status === 'waiting').length}
+    >
       <div className="relative min-h-full pb-20">
         <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-3 bg-white px-5 py-3 rounded-full shadow-2xl border border-gray-100 text-[11px] font-black group transition-all">
           <div className="relative">
