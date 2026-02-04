@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { SupportRequest, QueueStats } from '../types';
 import { 
-  Clock, CheckCircle, Search, Zap, Activity, AlertCircle, 
+  Clock, CheckCircle, Search, Activity, AlertCircle, 
   LayoutGrid, List, Settings, Trash2, PlayCircle,
   MessageCircle, RotateCcw, XCircle
 } from 'lucide-react';
@@ -18,7 +18,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
   const [now, setNow] = useState(Date.now());
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'queue' | 'history' | 'settings'>('queue');
-  // Cambio: 'grid' ahora es el valor inicial por defecto
+  // Aseguramos que la vista por defecto sea siempre la Grilla (Grid)
   const [viewMode, setViewMode] = useState<'cards' | 'grid'>('grid');
   const [newAgentEmail, setNewAgentEmail] = useState('');
 
