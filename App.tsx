@@ -21,33 +21,37 @@ const App: React.FC = () => {
   
   const prevWaitingCount = useRef(0);
 
-  // Lógica de Badge ultra-persistente para Agentes
-  const syncTeamsBadge = useCallback((count: number) => {
+  // Lógica de Notificación para Microsoft Teams
+  const syncTeamsNotification = useCallback((count: number) => {
     const teams = (window as any).microsoftTeams;
-    // Solo actuamos si el SDK está listo
-    if (isTeamsReady && teams?.app) {
-      const isAgent = authorizedAgents.some(a => a.toLowerCase() === currentUserId.toLowerCase()) || role === 'agent';
-      
-      try {
-        if (isAgent) {
-          // Si hay tickets, ponemos el número. Si no, 0 lo limpia.
-          if (teams.app.setBadgeCount) {
-            teams.app.setBadgeCount(count).catch((e: any) => console.debug("Teams Badge Error", e));
-          }
-        } else {
-          if (teams.app.setBadgeCount) teams.app.setBadgeCount(0);
-        }
-      } catch (err) {
-        console.debug("Badge API not accessible", err);
+    if (!isTeamsReady || !teams?.app) return;
+
+    // Solo los agentes autorizados deben ver notificaciones en el icono
+    const isAuthorizedAgent = authorizedAgents.some(a => a.toLowerCase() === currentUserId.toLowerCase());
+    const finalCount = (isAuthorizedAgent || role === 'agent') ? count : 0;
+
+    try {
+      if (teams.app.setBadgeCount) {
+        teams.app.setBadgeCount(finalCount).catch(() => {
+          console.debug("Teams Badge falló - Posible restricción de permisos o app no anclada.");
+        });
       }
+      
+      // Alternativa: Actualizar título de pestaña (Teams a veces lo usa para la barra lateral)
+      if (finalCount > 0) {
+        document.title = `(${finalCount}) Soporte IT`;
+      } else {
+        document.title = `Soporte IT`;
+      }
+    } catch (err) {
+      console.debug("Error al acceder a la API de Badge de Teams");
     }
   }, [isTeamsReady, authorizedAgents, currentUserId, role]);
 
-  // Actualizar cada vez que cambien las solicitudes o el rol
   useEffect(() => {
     const waitingCount = requests.filter(r => r.status === 'waiting').length;
-    syncTeamsBadge(waitingCount);
-  }, [requests, syncTeamsBadge]);
+    syncTeamsNotification(waitingCount);
+  }, [requests, syncTeamsNotification]);
 
   const refreshData = useCallback(async (silent = false) => {
     if (!silent) setIsSyncing(true);
@@ -63,30 +67,24 @@ const App: React.FC = () => {
       setCountdown(15);
 
       const waitingCount = data.filter(r => r.status === 'waiting').length;
+      syncTeamsNotification(waitingCount);
 
-      // Sincronización forzada inmediata
-      syncTeamsBadge(waitingCount);
-
-      // Auto-cambio a rol de agente si el correo está autorizado
       if (agents.some(a => a.toLowerCase() === currentUserId.toLowerCase()) && role !== 'agent') {
         setRole('agent');
       }
 
-      // Alerta sonora para agentes
-      if (role === 'agent') {
-        if (waitingCount > prevWaitingCount.current) {
-          const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
-          audio.volume = 0.4;
-          audio.play().catch(() => {});
-        }
-        prevWaitingCount.current = waitingCount;
+      if (role === 'agent' && waitingCount > prevWaitingCount.current) {
+        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
+        audio.volume = 0.4;
+        audio.play().catch(() => {});
       }
+      prevWaitingCount.current = waitingCount;
     } catch (e) {
       setLastSyncStatus('offline');
     } finally {
       if (!silent) setIsSyncing(false);
     }
-  }, [role, currentUserId, syncTeamsBadge]);
+  }, [role, currentUserId, syncTeamsNotification]);
 
   useEffect(() => {
     const init = async () => {
@@ -102,10 +100,9 @@ const App: React.FC = () => {
           }
           setIsTeamsReady(true);
         } else {
-          setIsTeamsReady(true); // Fallback Navegador
+          setIsTeamsReady(true);
         }
       } catch (e) {
-        console.error("Teams Init Error", e);
         setIsTeamsReady(true);
       }
     };
