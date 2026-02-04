@@ -18,7 +18,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
   const [now, setNow] = useState(Date.now());
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'queue' | 'history' | 'settings'>('queue');
-  const [viewMode, setViewMode] = useState<'cards' | 'grid'>('cards');
+  // Cambio: 'grid' ahora es el valor inicial por defecto
+  const [viewMode, setViewMode] = useState<'cards' | 'grid'>('grid');
   const [newAgentEmail, setNewAgentEmail] = useState('');
 
   useEffect(() => {
