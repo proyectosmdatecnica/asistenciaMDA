@@ -89,7 +89,7 @@ const UserRequestView: React.FC<UserRequestViewProps> = ({ activeRequests, queue
               <div className="space-y-6">
                 <div>
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block ml-2">Asunto del Problema</label>
-                  <input type="text" value={subject} onChange={e => setSubject(e.target.value)} className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-indigo-600 rounded-2xl font-bold" placeholder="Ej: No funciona mi monitor" required />
+                  <input type="text" value={subject} onChange={e => setSubject(e.target.value)} className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-indigo-600 rounded-2xl font-bold" placeholder="Ej: No conecta Plataforma" required />
                 </div>
 
                 <div>
