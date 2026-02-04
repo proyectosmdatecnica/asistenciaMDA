@@ -3,7 +3,7 @@ import { SupportRequest, QueueStats } from '../types';
 import { 
   Clock, CheckCircle, Search, Activity, AlertCircle, 
   LayoutGrid, List, Settings, Trash2, PlayCircle,
-  MessageCircle, RotateCcw, XCircle
+  MessageCircle, RotateCcw, XCircle, Calendar
 } from 'lucide-react';
 
 interface AgentDashboardProps {
@@ -18,7 +18,6 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
   const [now, setNow] = useState(Date.now());
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'queue' | 'history' | 'settings'>('queue');
-  // Aseguramos que la vista por defecto sea siempre la Grilla (Grid)
   const [viewMode, setViewMode] = useState<'cards' | 'grid'>('grid');
   const [newAgentEmail, setNewAgentEmail] = useState('');
 
@@ -50,6 +49,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
     const s = Math.floor((now - t) / 1000);
     const m = Math.floor(s / 60);
     return m > 60 ? `${Math.floor(m/60)}h ${m%60}m` : `${m}m ${s % 60}s`;
+  };
+
+  const formatDate = (t: number) => {
+    const d = new Date(Number(t));
+    return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   };
 
   const PriorityBadge = ({ priority }: { priority: SupportRequest['priority'] }) => {
@@ -141,7 +145,6 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                   </div>
                 </div>
               ))}
-              {inProgress.length === 0 && <div className="p-10 text-center border-2 border-dashed border-gray-100 rounded-[2rem] text-gray-300 font-bold text-xs">No hay tickets en proceso</div>}
             </div>
 
             <div className="space-y-5">
@@ -163,11 +166,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                   )}
                 </div>
               ))}
-              {waiting.length === 0 && <div className="p-10 text-center border-2 border-dashed border-gray-100 rounded-[2rem] text-gray-300 font-bold text-xs">Cola vacía</div>}
             </div>
           </div>
         ) : (
-          /* GRID VIEW (TABLE) */
           <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden animate-in fade-in slide-in-from-bottom-4">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
@@ -187,9 +188,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                     const isInProgress = req.status === 'in-progress';
                     return (
                       <tr key={req.id} className={`group hover:bg-gray-50 transition-colors ${req.priority === 'urgent' ? 'bg-red-50/30' : ''}`}>
-                        <td className="p-5">
-                          <span className="text-[10px] font-black text-gray-400">{req.id}</span>
-                        </td>
+                        <td className="p-5"><span className="text-[10px] font-black text-gray-400">{req.id}</span></td>
                         <td className="p-5">
                           <div className="flex items-center space-x-3">
                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black text-white ${isInProgress ? 'bg-indigo-600' : 'bg-gray-300'}`}>{req.userName.charAt(0)}</div>
@@ -200,25 +199,21 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                           <p className="text-xs font-bold text-gray-800 truncate">{req.subject}</p>
                           {req.aiSummary && <p className="text-[10px] text-indigo-500 font-bold truncate opacity-80 mt-0.5">{req.aiSummary}</p>}
                         </td>
-                        <td className="p-5">
-                          <PriorityBadge priority={req.priority} />
-                        </td>
+                        <td className="p-5"><PriorityBadge priority={req.priority} /></td>
                         <td className="p-5">
                           <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${isInProgress ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-600'}`}>
                             {isInProgress ? 'Atendiendo' : 'En Cola'}
                           </span>
                         </td>
-                        <td className="p-5 text-[10px] font-black text-gray-400">
-                          {getElapsedTime(req.startedAt || req.createdAt)}
-                        </td>
+                        <td className="p-5 text-[10px] font-black text-gray-400">{getElapsedTime(req.startedAt || req.createdAt)}</td>
                         <td className="p-5 text-center">
                           <div className="flex items-center justify-center space-x-1.5">
                             {isInProgress ? (
                               <>
-                                <button onClick={() => onUpdateStatus(req.id, 'waiting')} className="p-2 bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition-all shadow-sm" title="Volver a la cola"><RotateCcw size={14}/></button>
-                                <button onClick={() => onUpdateStatus(req.id, 'cancelled')} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all shadow-sm" title="No Solucionado"><XCircle size={14}/></button>
-                                <button onClick={() => onUpdateStatus(req.id, 'completed')} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all shadow-sm" title="Completar"><CheckCircle size={14}/></button>
-                                <button onClick={() => openTeamsChat(req.userId, req.id)} className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-600 hover:text-white transition-all shadow-sm" title="Contactar"><MessageCircle size={14}/></button>
+                                <button onClick={() => onUpdateStatus(req.id, 'waiting')} className="p-2 bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition-all shadow-sm"><RotateCcw size={14}/></button>
+                                <button onClick={() => onUpdateStatus(req.id, 'cancelled')} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all shadow-sm"><XCircle size={14}/></button>
+                                <button onClick={() => onUpdateStatus(req.id, 'completed')} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all shadow-sm"><CheckCircle size={14}/></button>
+                                <button onClick={() => openTeamsChat(req.userId, req.id)} className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-600 hover:text-white transition-all shadow-sm"><MessageCircle size={14}/></button>
                               </>
                             ) : (
                               <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className={`p-2 flex items-center space-x-2 rounded-lg font-black text-[10px] uppercase tracking-tighter shadow-sm transition-all ${req.priority === 'urgent' ? 'bg-red-600 text-white' : 'bg-indigo-600 text-white'}`}>
@@ -230,9 +225,6 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       </tr>
                     );
                   })}
-                  {[...inProgress, ...waiting].length === 0 && (
-                    <tr><td colSpan={7} className="p-20 text-center text-gray-300 font-bold text-sm">No hay actividad en la cola</td></tr>
-                  )}
                 </tbody>
               </table>
             </div>
@@ -245,23 +237,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
               <Settings className="text-indigo-600" />
               <span>Gestión de Agentes de TI</span>
             </h3>
-            
             <div className="flex space-x-3 mb-8">
-              <input 
-                type="email" 
-                placeholder="correo@empresa.com" 
-                className="flex-1 bg-gray-50 border-2 border-transparent focus:border-indigo-500 rounded-2xl px-6 outline-none font-bold text-sm h-14"
-                value={newAgentEmail}
-                onChange={e => setNewAgentEmail(e.target.value)}
-              />
-              <button 
-                onClick={() => { if(newAgentEmail) { onManageAgent('add', newAgentEmail); setNewAgentEmail(''); }}}
-                className="bg-indigo-600 text-white px-8 h-14 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-100 hover:scale-[1.02] transition-transform"
-              >
-                Agregar
-              </button>
+              <input type="email" placeholder="correo@empresa.com" className="flex-1 bg-gray-50 border-2 border-transparent focus:border-indigo-500 rounded-2xl px-6 outline-none font-bold text-sm h-14" value={newAgentEmail} onChange={e => setNewAgentEmail(e.target.value)} />
+              <button onClick={() => { if(newAgentEmail) { onManageAgent('add', newAgentEmail); setNewAgentEmail(''); }}} className="bg-indigo-600 text-white px-8 h-14 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-100">Agregar</button>
             </div>
-
             <div className="grid grid-cols-1 gap-3">
               {agents.map(email => (
                 <div key={email} className="flex items-center justify-between p-5 bg-gray-50 rounded-2xl border border-gray-100 group">
@@ -273,27 +252,42 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
           </div>
         </div>
       ) : (
-        /* HISTORY TAB */
+        /* HISTORIAL TAB ACTUALIZADA */
         <div className="bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden shadow-xl animate-in slide-in-from-bottom-4">
-           <table className="w-full text-left text-xs border-collapse">
-              <thead><tr className="bg-gray-50 border-b border-gray-100"><th className="p-6 font-black text-gray-400 uppercase text-[9px] tracking-widest">Usuario</th><th className="p-6 font-black text-gray-400 uppercase text-[9px] tracking-widest">Asunto</th><th className="p-6 font-black text-gray-400 uppercase text-[9px] tracking-widest">Prioridad</th><th className="p-6 font-black text-gray-400 uppercase text-[9px] tracking-widest">Agente</th><th className="p-6 font-black text-gray-400 uppercase text-[9px] tracking-widest">Finalizado</th><th className="p-6 font-black text-gray-400 uppercase text-[9px] tracking-widest">Estado</th></tr></thead>
-              <tbody className="divide-y divide-gray-50">
-                {completed.map(req => (
-                  <tr key={req.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="p-6 font-black text-gray-900">{req.userName}</td>
-                    <td className="p-6 font-bold text-gray-600">{req.subject}</td>
-                    <td className="p-6"><PriorityBadge priority={req.priority} /></td>
-                    <td className="p-6 font-black text-indigo-600">{req.agentName || '-'}</td>
-                    <td className="p-6 font-bold text-gray-400">{req.completedAt ? new Date(Number(req.completedAt)).toLocaleTimeString() : '-'}</td>
-                    <td className="p-6">
-                      <span className={`text-[8px] font-black uppercase px-2 py-1 rounded ${req.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                        {req.status === 'completed' ? 'Solucionado' : 'No Solucionado'}
-                      </span>
-                    </td>
+           <div className="overflow-x-auto">
+             <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] tracking-widest">Ticket</th>
+                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] tracking-widest">Usuario</th>
+                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] tracking-widest">Asunto</th>
+                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] tracking-widest">Prioridad</th>
+                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] tracking-widest">Agente</th>
+                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] tracking-widest">Creado</th>
+                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] tracking-widest">Atendido</th>
+                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] tracking-widest">Estado</th>
                   </tr>
-                ))}
-              </tbody>
-           </table>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {completed.map(req => (
+                    <tr key={req.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="p-6 font-black text-indigo-400 text-[10px]">{req.id}</td>
+                      <td className="p-6 font-black text-gray-900">{req.userName}</td>
+                      <td className="p-6 font-bold text-gray-600 max-w-[200px] truncate">{req.subject}</td>
+                      <td className="p-6"><PriorityBadge priority={req.priority} /></td>
+                      <td className="p-6 font-black text-indigo-600">{req.agentName || '-'}</td>
+                      <td className="p-6 font-bold text-gray-400 flex items-center"><Calendar size={10} className="mr-1.5"/> {formatDate(req.createdAt)}</td>
+                      <td className="p-6 font-bold text-gray-400">{req.completedAt ? formatDate(req.completedAt) : '-'}</td>
+                      <td className="p-6">
+                        <span className={`text-[8px] font-black uppercase px-2 py-1 rounded ${req.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                          {req.status === 'completed' ? 'Solucionado' : 'No Solucionado'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+             </table>
+           </div>
         </div>
       )}
     </div>
