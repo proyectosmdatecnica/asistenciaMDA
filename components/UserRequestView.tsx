@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SupportRequest } from '../types';
-import { Send, Loader2, Timer, Plus, MessageCircle, User, Edit3, Save, X } from 'lucide-react';
+import { Send, Loader2, Timer, Plus, MessageCircle, User, Edit3, Save, X, AlertTriangle } from 'lucide-react';
 
 interface UserRequestViewProps {
   activeRequests: SupportRequest[];
@@ -20,7 +20,7 @@ const IT_TIPS = [
 const UserRequestView: React.FC<UserRequestViewProps> = ({ activeRequests, queuePosition, averageWaitTime, onSubmit, onCancel }) => {
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
-  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
+  const [priority, setPriority] = useState<SupportRequest['priority']>('medium');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false); 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -56,8 +56,16 @@ const UserRequestView: React.FC<UserRequestViewProps> = ({ activeRequests, queue
     setEditingId(null);
     setSubject('');
     setDescription('');
+    setPriority('medium');
     setShowForm(false);
   };
+
+  const priorityOptions: { value: SupportRequest['priority']; label: string; color: string }[] = [
+    { value: 'low', label: 'Baja', color: 'bg-emerald-50 text-emerald-600 border-emerald-100' },
+    { value: 'medium', label: 'Media', color: 'bg-blue-50 text-blue-600 border-blue-100' },
+    { value: 'high', label: 'Alta', color: 'bg-amber-50 text-amber-600 border-amber-100' },
+    { value: 'urgent', label: 'Urgente', color: 'bg-red-50 text-red-600 border-red-200 shadow-sm' }
+  ];
 
   return (
     <div className="max-w-2xl mx-auto pt-6">
@@ -79,9 +87,38 @@ const UserRequestView: React.FC<UserRequestViewProps> = ({ activeRequests, queue
                 {activeRequests.length > 0 && <button type="button" onClick={() => setShowForm(false)} className="text-gray-400"><X size={16}/></button>}
               </div>
               <div className="space-y-6">
-                <input type="text" value={subject} onChange={e => setSubject(e.target.value)} className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-indigo-600 rounded-2xl font-bold" placeholder="Asunto" required />
-                <textarea rows={2} value={description} onChange={e => setDescription(e.target.value)} className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-indigo-600 rounded-2xl font-medium" placeholder="Detalles..." />
-                <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white font-black py-5 rounded-2xl text-lg flex items-center justify-center space-x-3">
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block ml-2">Asunto del Problema</label>
+                  <input type="text" value={subject} onChange={e => setSubject(e.target.value)} className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-indigo-600 rounded-2xl font-bold" placeholder="Ej: No funciona mi monitor" required />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block ml-2">Nivel de Prioridad</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {priorityOptions.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setPriority(opt.value)}
+                        className={`py-3 px-2 rounded-xl text-[10px] font-black uppercase border-2 transition-all ${
+                          priority === opt.value 
+                            ? `${opt.color.replace('bg-', 'bg-opacity-100 bg-').replace('text-', 'text-white text-')} border-transparent scale-105 shadow-md` 
+                            : 'bg-white text-gray-400 border-gray-100 hover:border-indigo-200'
+                        }`}
+                      >
+                        {priority === opt.value && opt.value === 'urgent' && <AlertTriangle size={10} className="inline mr-1 mb-0.5" />}
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block ml-2">Descripción (Opcional)</label>
+                  <textarea rows={2} value={description} onChange={e => setDescription(e.target.value)} className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-indigo-600 rounded-2xl font-medium" placeholder="Brinda más detalles si es necesario..." />
+                </div>
+
+                <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white font-black py-5 rounded-2xl text-lg flex items-center justify-center space-x-3 hover:bg-indigo-700 transition-colors shadow-xl">
                   {isSubmitting ? <Loader2 className="animate-spin" /> : editingId ? <Save size={20}/> : <Send size={20}/>}
                   <span>{editingId ? 'GUARDAR CAMBIOS' : 'ENVIAR SOLICITUD'}</span>
                 </button>
@@ -94,16 +131,31 @@ const UserRequestView: React.FC<UserRequestViewProps> = ({ activeRequests, queue
                 const isWaiting = req.status === 'waiting';
                 const agentInfo = req.agentId ? ` (${req.agentId})` : '';
                 
+                const priorityStyles = {
+                  low: 'bg-emerald-50 text-emerald-600',
+                  medium: 'bg-blue-50 text-blue-600',
+                  high: 'bg-amber-50 text-amber-600',
+                  urgent: 'bg-red-600 text-white shadow-sm animate-pulse'
+                };
+
                 return (
-                  <div key={req.id} className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
+                  <div key={req.id} className={`bg-white rounded-3xl p-6 border shadow-sm transition-all ${req.priority === 'urgent' ? 'border-red-200' : 'border-gray-100'}`}>
                     <div className="flex justify-between items-start mb-4">
                       <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">{isWaiting ? <Timer size={20}/> : <User size={20}/>}</div>
-                        <div><h4 className="text-sm font-black text-gray-900">{req.subject}</h4><p className="text-[10px] text-gray-400 font-bold uppercase">ID: {req.id}</p></div>
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${req.priority === 'urgent' ? 'bg-red-50 text-red-600' : 'bg-indigo-50 text-indigo-600'}`}>
+                          {isWaiting ? <Timer size={20}/> : <User size={20}/>}
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-black text-gray-900">{req.subject}</h4>
+                          <p className="text-[10px] text-gray-400 font-bold uppercase">ID: {req.id}</p>
+                        </div>
                       </div>
                       <div className="flex items-center space-x-3">
                         {isWaiting && <button onClick={() => handleStartEdit(req)} className="text-indigo-500 hover:text-indigo-700 transition-colors"><Edit3 size={16}/></button>}
-                        <span className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase bg-indigo-50 text-indigo-600`}>{req.priority}</span>
+                        <span className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase ${priorityStyles[req.priority]}`}>
+                          {req.priority === 'urgent' && '⚠️ '}
+                          {req.priority === 'low' ? 'Baja' : req.priority === 'medium' ? 'Media' : req.priority === 'high' ? 'Alta' : 'Urgente'}
+                        </span>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3 mb-4">

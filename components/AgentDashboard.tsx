@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { SupportRequest, QueueStats } from '../types';
 import { 
   Clock, CheckCircle, Search, History, ListFilter, Monitor, Cpu, Globe, Key, 
   Download, Zap, XCircle, RefreshCcw, ChevronDown, ChevronUp, MessageCircle, 
-  User, LayoutGrid, List, Settings, Plus, Trash2, Activity, Users, RotateCcw
+  User, LayoutGrid, List, Settings, Plus, Trash2, Activity, AlertCircle
 } from 'lucide-react';
 
 interface AgentDashboardProps {
@@ -28,7 +27,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
   }, []);
 
   const openTeamsChat = (userId: string, ticketId: string) => {
-    const message = encodeURIComponent(`Hola! Te contacto por el Ticket número ${ticketId}`);
+    const message = encodeURIComponent(`Hola! Te contacto por el Ticket numero ${ticketId}`);
     window.open(`https://teams.microsoft.com/l/chat/0/0?users=${userId}&message=${message}`, '_blank');
   };
 
@@ -39,7 +38,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
   ), [requests, searchTerm]);
 
   const waiting = filteredRequests.filter(r => r.status === 'waiting').sort((a, b) => {
-    const p = { high: 3, medium: 2, low: 1 };
+    const p = { urgent: 4, high: 3, medium: 2, low: 1 };
     return p[b.priority] - p[a.priority] || a.createdAt - b.createdAt;
   });
 
@@ -48,177 +47,150 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
 
   const getElapsedTime = (t: number) => {
     const s = Math.floor((now - t) / 1000);
-    const m = Math.floor(s / 60);
-    const remS = s % 60;
-    return `${m}:${remS.toString().padStart(2, '0')}`;
+    return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
   };
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12 animate-in fade-in">
-      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
         {[
-          { label: 'Espera promedio', val: `${stats.averageWaitTime}min`, icon: <Zap size={14}/>, color: 'text-emerald-600' },
-          { label: 'En Espera', val: waiting.length, icon: <Clock size={14}/>, color: 'text-amber-600' },
-          { label: 'En Proceso', val: inProgress.length, icon: <Activity size={14}/>, color: 'text-indigo-600' },
-          { label: 'Resueltos Hoy', val: stats.completedToday, icon: <CheckCircle size={14}/>, color: 'text-emerald-600' }
+          { label: 'Espera promedio', val: `${stats.averageWaitTime}min`, icon: <Zap size={14}/>, color: 'emerald' },
+          { label: 'En Espera', val: waiting.length, icon: <Clock size={14}/>, color: 'amber' },
+          { label: 'En Proceso', val: inProgress.length, icon: <Activity size={14}/>, color: 'indigo' },
+          { label: 'Resueltos Hoy', val: stats.completedToday, icon: <CheckCircle size={14}/>, color: 'emerald' }
         ].map((s, i) => (
-          <div key={i} className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm flex flex-col justify-between">
-            <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] block mb-4">{s.label}</span>
-            <div className="flex items-end justify-between">
-              <p className="text-3xl font-black text-gray-900">{s.val}</p>
-              <div className={`${s.color} opacity-30`}>{s.icon}</div>
-            </div>
+          <div key={i} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">{s.label}</span>
+            <p className="text-3xl font-black text-gray-900">{s.val}</p>
           </div>
         ))}
       </div>
 
-      {/* Toolbar */}
-      <div className="bg-white p-2.5 rounded-[2rem] border border-gray-200 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+      <div className="bg-white p-2.5 rounded-3xl border border-gray-200 flex flex-wrap items-center justify-between gap-4">
         <div className="flex bg-gray-50 p-1 rounded-2xl">
-          <button onClick={() => setActiveTab('queue')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center space-x-2 ${activeTab === 'queue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>
-            <ListFilter size={14}/><span>Cola Activa</span>
-          </button>
-          <button onClick={() => setActiveTab('history')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center space-x-2 ${activeTab === 'history' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>
-            <History size={14}/><span>Historial</span>
-          </button>
-          <button onClick={() => setActiveTab('settings')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center space-x-2 ${activeTab === 'settings' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>
-            <Settings size={14}/><span>Configuración</span>
-          </button>
+          <button onClick={() => setActiveTab('queue')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'queue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>COLA</button>
+          <button onClick={() => setActiveTab('history')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>HISTORIAL</button>
+          <button onClick={() => setActiveTab('settings')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'settings' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>CONFIG</button>
         </div>
         
         <div className="flex items-center space-x-3 flex-1 max-w-md">
-          <div className="flex items-center bg-gray-50 rounded-2xl px-5 py-2.5 w-full border border-gray-100 focus-within:bg-white focus-within:border-indigo-200 transition-all">
-            <Search size={14} className="text-gray-400 mr-3" />
-            <input type="text" placeholder="Buscar ticket o usuario..." className="bg-transparent border-none outline-none text-xs font-bold w-full text-gray-700" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+          <div className="flex items-center bg-gray-50 rounded-2xl px-4 py-2 w-full border border-gray-100">
+            <Search size={14} className="text-gray-400 mr-2" />
+            <input type="text" placeholder="Filtrar por nombre, asunto o ID..." className="bg-transparent border-none outline-none text-xs font-bold w-full" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
         </div>
       </div>
 
       {activeTab === 'queue' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
-          
-          {/* En Atención */}
-          <div className="space-y-4">
-            <h3 className="text-[11px] font-black text-indigo-500 uppercase tracking-widest px-2">Mi Atención Actual ({inProgress.length})</h3>
+        <div className={viewMode === 'compact' ? "grid grid-cols-1 md:grid-cols-3 gap-6" : "grid grid-cols-1 lg:grid-cols-2 gap-8"}>
+          <div className="space-y-5">
+            <h3 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest px-2">En Atención ({inProgress.length})</h3>
             {inProgress.map(req => (
-              <div key={req.id} className="bg-white border-2 border-indigo-100 rounded-[2rem] p-6 shadow-xl animate-in slide-in-from-left-4">
-                <div className="flex justify-between items-start mb-4">
+              <div key={req.id} className={`bg-white border-2 rounded-[2rem] p-5 shadow-lg animate-in slide-in-from-left-4 ${req.priority === 'urgent' ? 'border-red-400 shadow-red-50' : 'border-indigo-100'}`}>
+                <div className="flex justify-between items-start mb-3">
                   <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black">{req.userName.charAt(0)}</div>
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-black ${req.priority === 'urgent' ? 'bg-red-600' : 'bg-indigo-600'}`}>{req.userName.charAt(0)}</div>
                     <div>
-                      <h4 className="text-xs font-black text-gray-900 leading-tight">{req.userName}</h4>
-                      <p className="text-[9px] text-indigo-400 font-bold uppercase mt-1">Ticket {req.id}</p>
+                      <p className="text-xs font-black text-gray-900 leading-none">{req.userName}</p>
+                      <p className={`text-[9px] font-bold mt-1 uppercase ${req.priority === 'urgent' ? 'text-red-500' : 'text-indigo-400'}`}>
+                        Ticket {req.id} {req.priority === 'urgent' && '• URGENTE'}
+                      </p>
                     </div>
                   </div>
-                  <div className="flex space-x-2">
-                    <button 
-                      onClick={() => onUpdateStatus(req.id, 'waiting')} 
-                      className="bg-amber-50 text-amber-600 p-2.5 rounded-xl hover:bg-amber-600 hover:text-white transition-all shadow-sm"
-                      title="Devolver a la cola"
-                    >
-                      <RotateCcw size={16}/>
-                    </button>
-                    <button 
-                      onClick={() => onUpdateStatus(req.id, 'cancelled')} 
-                      className="bg-red-50 text-red-600 p-2.5 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-sm"
-                      title="Cerrar sin solución"
-                    >
-                      <XCircle size={16}/>
-                    </button>
-                    <button 
-                      onClick={() => onUpdateStatus(req.id, 'completed')} 
-                      className="bg-emerald-50 text-emerald-600 p-2.5 rounded-xl hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
-                      title="Marcar como solucionado"
-                    >
-                      <CheckCircle size={16}/>
-                    </button>
-                  </div>
+                  <button onClick={() => onUpdateStatus(req.id, 'completed')} className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"><CheckCircle size={16}/></button>
                 </div>
-                <p className="text-[11px] font-black text-gray-700 line-clamp-2 mb-4 px-1">{req.subject}</p>
-                <div className="flex items-center justify-between pt-4 border-t border-gray-50">
-                  <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-3 py-1 rounded-lg">Cronómetro: {getElapsedTime(req.startedAt || req.createdAt)}</span>
-                  <button onClick={() => openTeamsChat(req.userId, req.id)} className="text-[10px] font-black text-indigo-600 hover:bg-indigo-50 px-3 py-1 rounded-lg uppercase bg-indigo-50/50">Abrir Chat de Teams</button>
+                <p className="text-[11px] font-black text-gray-700 mb-3">{req.subject}</p>
+                <div className="flex items-center justify-between pt-3 border-t border-gray-50">
+                  <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-3 py-1 rounded-lg">{getElapsedTime(req.startedAt || req.createdAt)}</span>
+                  <button onClick={() => openTeamsChat(req.userId, req.id)} className="text-[10px] font-black text-indigo-600 hover:bg-indigo-50 px-3 py-1 rounded-lg uppercase">Contactar</button>
                 </div>
               </div>
             ))}
-            {inProgress.length === 0 && (
-              <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-[2rem] p-12 text-center">
-                <Activity size={32} className="mx-auto text-gray-300 mb-4" />
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">No tienes tickets asignados</p>
-              </div>
-            )}
           </div>
 
-          {/* En Espera */}
           <div className="space-y-5">
-            <h3 className="text-[11px] font-black text-amber-500 uppercase tracking-widest px-2">Lista de Espera ({waiting.length})</h3>
+            <h3 className="text-[10px] font-black text-amber-400 uppercase tracking-widest px-2">Lista de Espera ({waiting.length})</h3>
             {waiting.map(req => (
-              <div key={req.id} className={`bg-white rounded-[2rem] p-5 border-2 animate-in slide-in-from-right-4 ${req.priority === 'high' ? 'border-red-100' : 'border-gray-50 shadow-sm'}`}>
+              <div key={req.id} className={`bg-white rounded-[2rem] p-5 border-2 animate-in slide-in-from-right-4 transition-all ${
+                req.priority === 'urgent' ? 'border-red-500 shadow-red-100 ring-2 ring-red-50 ring-offset-2' : 
+                req.priority === 'high' ? 'border-red-100 shadow-sm' : 'border-gray-50 shadow-sm'
+              }`}>
                 <div className="flex justify-between items-start mb-3">
                   <div>
-                    <h4 className="text-xs font-black text-gray-900 mb-1">{req.userName}</h4>
-                    <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase ${req.priority === 'high' ? 'bg-red-500 text-white' : 'bg-amber-100 text-amber-700'}`}>{req.priority}</span>
+                    <h4 className="text-xs font-black text-gray-900 mb-1 flex items-center">
+                      {req.userName}
+                      {req.priority === 'urgent' && <AlertCircle size={12} className="ml-2 text-red-600 animate-bounce" />}
+                    </h4>
+                    <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase ${
+                      req.priority === 'urgent' ? 'bg-red-600 text-white' : 
+                      req.priority === 'high' ? 'bg-red-100 text-red-700' : 
+                      req.priority === 'medium' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'
+                    }`}>
+                      {req.priority === 'urgent' ? 'Urgente' : req.priority === 'high' ? 'Alta' : req.priority === 'medium' ? 'Media' : 'Baja'}
+                    </span>
                   </div>
-                  <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className="bg-indigo-600 text-white text-[9px] font-black px-4 py-2 rounded-xl shadow-lg hover:bg-indigo-700 transition-all">TOMAR TICKET</button>
+                  <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className={`text-[9px] font-black px-4 py-2 rounded-xl shadow-lg transition-colors ${
+                    req.priority === 'urgent' ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  }`}>TOMAR</button>
                 </div>
                 {req.aiSummary && (
-                  <div className="bg-amber-50/50 p-3 rounded-xl mb-3">
-                    <p className="text-[10px] text-amber-900 font-bold leading-snug">
-                      <span className="text-amber-600 font-black uppercase mr-1">Análisis IA:</span>{req.aiSummary}
+                  <div className={`p-3 rounded-xl mb-2 ${req.priority === 'urgent' ? 'bg-red-50' : 'bg-amber-50/50'}`}>
+                    <p className={`text-[10px] leading-snug font-bold ${req.priority === 'urgent' ? 'text-red-900' : 'text-amber-900'}`}>
+                      <span className={`font-black uppercase mr-1 ${req.priority === 'urgent' ? 'text-red-600' : 'text-amber-600'}`}>Resumen IA:</span>
+                      {req.aiSummary}
                     </p>
                   </div>
                 )}
-                <p className="text-[10px] text-gray-500 italic line-clamp-2 px-1">{req.description || "Sin detalles adicionales."}</p>
+                <p className="text-[10px] text-gray-500 italic px-1">{req.description || "Sin descripción."}</p>
               </div>
             ))}
-            {waiting.length === 0 && (
-              <div className="bg-emerald-50/50 border-2 border-dashed border-emerald-100 rounded-[2rem] p-12 text-center">
-                <CheckCircle size={32} className="mx-auto text-emerald-200 mb-4" />
-                <p className="text-xs font-bold text-emerald-400 uppercase tracking-widest">Cola vacía. ¡Buen trabajo!</p>
-              </div>
-            )}
           </div>
         </div>
       ) : activeTab === 'settings' ? (
-        <div className="max-w-3xl mx-auto space-y-8 animate-in zoom-in-95">
-          <div className="bg-white p-8 md:p-12 rounded-[3rem] border border-gray-100 shadow-2xl">
-            <h3 className="text-xl font-black text-gray-900 mb-8 flex items-center space-x-3">
-              <Settings className="text-indigo-600" /><span>Gestión de Agentes de TI</span>
+        <div className="max-w-3xl mx-auto space-y-8">
+          <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-xl">
+            <h3 className="text-lg font-black text-gray-900 mb-6 flex items-center space-x-2">
+              <Settings className="text-indigo-600" />
+              <span>Gestión de Agentes de TI</span>
             </h3>
-            <div className="flex flex-col sm:flex-row gap-3 mb-10">
-              <input type="email" placeholder="correo@empresa.com" className="flex-1 bg-gray-50 border-2 border-transparent focus:border-indigo-500 rounded-2xl px-6 py-4 outline-none font-bold text-sm" value={newAgentEmail} onChange={e => setNewAgentEmail(e.target.value)} />
-              <button onClick={() => { if(newAgentEmail) { onManageAgent('add', newAgentEmail); setNewAgentEmail(''); }}} className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center space-x-2">
-                <Plus size={16}/><span>Autorizar</span>
+            
+            <div className="flex space-x-3 mb-8">
+              <input 
+                type="email" 
+                placeholder="correo@empresa.com" 
+                className="flex-1 bg-gray-50 border-2 border-transparent focus:border-indigo-500 rounded-2xl px-6 outline-none font-bold text-sm"
+                value={newAgentEmail}
+                onChange={e => setNewAgentEmail(e.target.value)}
+              />
+              <button 
+                onClick={() => { if(newAgentEmail) { onManageAgent('add', newAgentEmail); setNewAgentEmail(''); }}}
+                className="bg-indigo-600 text-white px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest"
+              >
+                Agregar
               </button>
             </div>
+
             <div className="space-y-3">
               {agents.map(email => (
-                <div key={email} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 group">
+                <div key={email} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
                   <span className="text-sm font-bold text-gray-700">{email}</span>
-                  <button onClick={() => onManageAgent('remove', email)} className="text-red-400 hover:text-red-600 p-2 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={18}/></button>
+                  <button onClick={() => onManageAgent('remove', email)} className="text-red-400 hover:text-red-600 p-2"><Trash2 size={16}/></button>
                 </div>
               ))}
             </div>
           </div>
         </div>
       ) : (
-        /* History Table */
-        <div className="bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden shadow-sm">
+        <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm">
            <table className="w-full text-left text-xs border-collapse">
-              <thead><tr className="bg-gray-50 border-b border-gray-100"><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Usuario / Ticket</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Asunto</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Estado Final</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Atendido por</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Cierre</th></tr></thead>
+              <thead><tr className="bg-gray-50 border-b border-gray-100"><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Usuario</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Asunto</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Prioridad</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Agente</th></tr></thead>
               <tbody className="divide-y divide-gray-50">
                 {completed.map(req => (
-                  <tr key={req.id} className="hover:bg-indigo-50/10 transition-colors">
-                    <td className="p-6"><p className="font-black text-gray-900">{req.userName}</p><p className="text-[10px] text-gray-400 font-mono">{req.id}</p></td>
-                    <td className="p-6 font-bold text-gray-600 max-w-xs truncate">{req.subject}</td>
-                    <td className="p-6">
-                      <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${req.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                        {req.status === 'completed' ? 'Solucionado' : 'No Solucionado'}
-                      </span>
-                    </td>
-                    <td className="p-6 font-black text-gray-700">{req.agentName || 'N/A'}</td>
-                    <td className="p-6 text-gray-400">{req.completedAt ? new Date(Number(req.completedAt)).toLocaleDateString() : '-'}</td>
+                  <tr key={req.id} className="hover:bg-gray-50">
+                    <td className="p-6 font-black text-gray-900">{req.userName}</td>
+                    <td className="p-6 font-bold text-gray-600">{req.subject}</td>
+                    <td className="p-6 font-black uppercase text-[10px]">{req.priority}</td>
+                    <td className="p-6 font-black text-indigo-600">{req.agentName || '-'}</td>
                   </tr>
                 ))}
               </tbody>
