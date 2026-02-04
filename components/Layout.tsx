@@ -1,9 +1,9 @@
-
 import React from 'react';
 import { 
   Users, 
   MessageSquare, 
   HelpCircle,
+  Bell
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -11,9 +11,10 @@ interface LayoutProps {
   role: 'user' | 'agent';
   onSwitchRole: () => void;
   onOpenHelp: () => void;
+  pendingCount?: number;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, role, onSwitchRole, onOpenHelp }) => {
+const Layout: React.FC<LayoutProps> = ({ children, role, onSwitchRole, onOpenHelp, pendingCount = 0 }) => {
   return (
     <div className="flex h-screen w-full bg-[#f5f5f5] font-sans">
       {/* Barra lateral estilo Teams */}
@@ -23,9 +24,14 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onSwitchRole, onOpenHel
           <span className="text-[10px] block text-center mt-1">Soporte</span>
         </div>
         {role === 'agent' && (
-          <div className="p-2 bg-[#5b5fc7] text-white rounded cursor-pointer">
+          <div className="p-2 bg-[#5b5fc7] text-white rounded cursor-pointer relative">
             <Users size={24} />
             <span className="text-[10px] block text-center mt-1">Cola</span>
+            {pendingCount > 0 && (
+              <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-[10px] font-black border-2 border-[#33344a] animate-bounce-short">
+                {pendingCount}
+              </div>
+            )}
           </div>
         )}
         
@@ -43,7 +49,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onSwitchRole, onOpenHel
         {/* Cabecera superior */}
         <header className="h-[48px] bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0">
           <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2" onClick={onSwitchRole} style={{cursor: 'pointer'}}>
               <div className="w-6 h-6 bg-[#5b5fc7] rounded-md flex items-center justify-center">
                 <MessageSquare size={14} className="text-white" />
               </div>
@@ -60,6 +66,12 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onSwitchRole, onOpenHel
           </div>
           
           <div className="flex items-center space-x-4">
+            {role === 'agent' && pendingCount > 0 && (
+              <div className="flex items-center bg-red-50 px-3 py-1 rounded-full text-red-600 space-x-2 animate-pulse">
+                <Bell size={12} className="fill-red-600" />
+                <span className="text-[10px] font-black uppercase tracking-tight">{pendingCount} Pendientes</span>
+              </div>
+            )}
             <div className="flex items-center space-x-3">
               <div className="text-right hidden sm:block">
                 <p className="text-[10px] font-black text-gray-400 uppercase leading-none">Conectado como</p>
