@@ -159,11 +159,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                     <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className={`text-[9px] font-black px-4 py-2 rounded-xl transition-all ${req.priority === 'urgent' ? 'bg-red-600 text-white shadow-red-200' : 'bg-indigo-600 text-white shadow-indigo-100 hover:shadow-indigo-200 hover:scale-105'}`} title="Asignarme este ticket y comenzar atención">TOMAR CASO</button>
                   </div>
                   <PriorityBadge priority={req.priority} />
-                  {req.aiSummary && (
-                    <div className="p-3 bg-gray-50 rounded-xl mt-3" title={`Resumen completo de la IA: ${req.aiSummary}`}>
-                      <p className="text-[10px] font-bold text-gray-600 leading-snug"><span className="font-black text-indigo-600 uppercase mr-1">Resumen:</span>{req.aiSummary}</p>
-                    </div>
-                  )}
+                  <div className="p-3 bg-gray-50 rounded-xl mt-3 cursor-help" title={`DETALLE ORIGINAL DEL USUARIO:\n${req.description || 'Sin descripción adicional'}\n\nResumen IA: ${req.aiSummary || 'No disponible'}`}>
+                    <p className="text-[10px] font-bold text-gray-600 leading-snug"><span className="font-black text-indigo-600 uppercase mr-1">Detalle (Hover):</span>{req.subject}</p>
+                  </div>
                 </div>
               ))}
             </div>
@@ -196,7 +194,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                             <span className="text-xs font-black text-gray-900">{req.userName}</span>
                           </div>
                         </td>
-                        <td className="p-5 max-w-xs cursor-help" title={`Asunto Original: ${req.subject}\n\nResumen IA: ${req.aiSummary || 'No disponible'}`}>
+                        <td className="p-5 max-w-xs cursor-help" title={`ASUNTO: ${req.subject}\n\nDETALLE DEL USUARIO:\n${req.description || 'Sin descripción adicional'}\n\nResumen IA: ${req.aiSummary || 'No disponible'}`}>
                           <p className="text-xs font-bold text-gray-800 truncate">{req.subject}</p>
                           {req.aiSummary && <p className="text-[10px] text-indigo-500 font-bold truncate opacity-80 mt-0.5">{req.aiSummary}</p>}
                         </td>
@@ -284,7 +282,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                     <tr key={req.id} className="hover:bg-gray-50 transition-colors">
                       <td className="p-6 font-black text-indigo-400 text-[10px]">{req.id}</td>
                       <td className="p-6 font-black text-gray-900">{req.userName}</td>
-                      <td className="p-6 font-bold text-gray-600 max-w-[200px] truncate cursor-help" title={req.subject}>{req.subject}</td>
+                      <td className="p-6 font-bold text-gray-600 max-w-[200px] truncate cursor-help" title={`ASUNTO: ${req.subject}\n\nDETALLE ORIGINAL:\n${req.description || 'Sin descripción'}`}>{req.subject}</td>
                       <td className="p-6"><PriorityBadge priority={req.priority} /></td>
                       <td className="p-6 font-black text-indigo-600">{req.agentName || '-'}</td>
                       <td className="p-6 font-bold text-gray-400 flex items-center"><Calendar size={10} className="mr-1.5"/> {formatDate(req.createdAt)}</td>
