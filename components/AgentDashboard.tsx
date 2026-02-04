@@ -3,7 +3,8 @@ import { SupportRequest, QueueStats } from '../types';
 import { 
   Clock, CheckCircle, Search, Activity, AlertCircle, 
   LayoutGrid, List, Settings, Trash2, PlayCircle,
-  MessageCircle, RotateCcw, XCircle, Calendar, User
+  MessageCircle, RotateCcw, XCircle, Calendar, User,
+  Server, Database, Cpu, Globe, ArrowRight, HardDrive, ShieldCheck
 } from 'lucide-react';
 
 interface AgentDashboardProps {
@@ -240,19 +241,101 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
           </div>
         )
       ) : activeTab === 'settings' ? (
-        <div className="max-w-3xl mx-auto space-y-8 animate-in slide-in-from-bottom-4">
+        <div className="max-w-5xl mx-auto space-y-10 animate-in slide-in-from-bottom-4">
+          {/* SECCIÓN DIAGRAMA DE ARQUITECTURA */}
+          <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden">
+            <h3 className="text-lg font-black text-gray-900 mb-8 flex items-center space-x-2">
+              <Globe className="text-indigo-600" />
+              <span>Mapa de Infraestructura del Sistema</span>
+            </h3>
+            
+            <div className="relative py-12 px-4 flex flex-col md:flex-row items-center justify-between gap-8">
+              {/* Cliente */}
+              <div className="flex flex-col items-center group w-full md:w-auto">
+                <div className="w-24 h-24 bg-[#5b5fc7] rounded-[2rem] flex items-center justify-center text-white shadow-xl shadow-indigo-100 group-hover:scale-110 transition-transform duration-500">
+                  <Globe size={40} />
+                </div>
+                <div className="mt-4 text-center">
+                  <p className="text-sm font-black text-gray-900 uppercase tracking-tighter">Frontend React</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase mt-1">Microsoft Teams Tab</p>
+                </div>
+              </div>
+
+              <div className="hidden md:flex flex-col items-center text-indigo-200 animate-pulse">
+                <ArrowRight size={24} />
+                <span className="text-[8px] font-black uppercase mt-1">HTTPS / JSON</span>
+              </div>
+
+              {/* API */}
+              <div className="flex flex-col items-center group w-full md:w-auto">
+                <div className="w-28 h-28 bg-[#33344a] rounded-[2rem] flex items-center justify-center text-white shadow-xl shadow-gray-200 border-4 border-indigo-500/20 group-hover:rotate-6 transition-all">
+                  <Server size={44} />
+                </div>
+                <div className="mt-4 text-center">
+                  <p className="text-sm font-black text-gray-900 uppercase tracking-tighter">Azure Functions</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase mt-1">Node.js Backend</p>
+                </div>
+              </div>
+
+              {/* Conexiones laterales desde API */}
+              <div className="flex md:flex-col gap-8 md:gap-4 items-center">
+                 {/* DB */}
+                <div className="flex flex-col items-center group">
+                  <div className="w-20 h-20 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-50 group-hover:-translate-y-2 transition-transform">
+                    <Database size={32} />
+                  </div>
+                  <div className="mt-3 text-center">
+                    <p className="text-[11px] font-black text-gray-800 uppercase leading-none">Azure SQL</p>
+                    <p className="text-[8px] font-bold text-gray-400 uppercase mt-1">Persistencia</p>
+                  </div>
+                </div>
+
+                {/* AI */}
+                <div className="flex flex-col items-center group">
+                  <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-purple-50 group-hover:scale-105 transition-transform">
+                    <Cpu size={32} />
+                  </div>
+                  <div className="mt-3 text-center">
+                    <p className="text-[11px] font-black text-gray-800 uppercase leading-none">Gemini 3 Flash</p>
+                    <p className="text-[8px] font-bold text-gray-400 uppercase mt-1">Triaje IA</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-8 p-6 bg-gray-50 rounded-3xl grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 border border-gray-100">
+               <div className="flex space-x-3 items-start">
+                  <Globe size={14} className="text-[#5b5fc7] mt-1 shrink-0" />
+                  <p className="text-[10px] font-medium text-gray-600">Interfaz de usuario embebida en Teams usando React 19.</p>
+               </div>
+               <div className="flex space-x-3 items-start">
+                  <Server size={14} className="text-[#33344a] mt-1 shrink-0" />
+                  <p className="text-[10px] font-medium text-gray-600">Servidores sin servidor (Serverless) que escalan según demanda.</p>
+               </div>
+               <div className="flex space-x-3 items-start">
+                  <Database size={14} className="text-emerald-600 mt-1 shrink-0" />
+                  <p className="text-[10px] font-medium text-gray-600">Base de datos relacional robusta con respaldo automático.</p>
+               </div>
+               <div className="flex space-x-3 items-start">
+                  <Cpu size={14} className="text-purple-600 mt-1 shrink-0" />
+                  <p className="text-[10px] font-medium text-gray-600">IA de Google procesando tickets para categorizarlos.</p>
+               </div>
+            </div>
+          </div>
+
+          {/* GESTIÓN DE AGENTES */}
           <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-xl">
             <h3 className="text-lg font-black text-gray-900 mb-6 flex items-center space-x-2">
-              <Settings className="text-indigo-600" />
-              <span>Gestión de Agentes de TI</span>
+              <ShieldCheck className="text-indigo-600" />
+              <span>Gestión de Agentes de TI Autorizados</span>
             </h3>
             <div className="flex space-x-3 mb-8">
               <input type="email" placeholder="correo@empresa.com" className="flex-1 bg-gray-50 border-2 border-transparent focus:border-indigo-500 rounded-2xl px-6 outline-none font-bold text-sm h-14" value={newAgentEmail} onChange={e => setNewAgentEmail(e.target.value)} />
-              <button onClick={() => { if(newAgentEmail) { onManageAgent('add', newAgentEmail); setNewAgentEmail(''); }}} className="bg-indigo-600 text-white px-8 h-14 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-100">Agregar</button>
+              <button onClick={() => { if(newAgentEmail) { onManageAgent('add', newAgentEmail); setNewAgentEmail(''); }}} className="bg-indigo-600 text-white px-8 h-14 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-colors">Agregar</button>
             </div>
-            <div className="grid grid-cols-1 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {agents.map(email => (
-                <div key={email} className="flex items-center justify-between p-5 bg-gray-50 rounded-2xl border border-gray-100 group">
+                <div key={email} className="flex items-center justify-between p-5 bg-gray-50 rounded-2xl border border-gray-100 group hover:border-indigo-200 transition-colors">
                   <span className="text-sm font-black text-gray-700">{email}</span>
                   <button onClick={() => onManageAgent('remove', email)} className="text-gray-300 group-hover:text-red-400 p-2 transition-colors" title="Eliminar agente"><Trash2 size={16}/></button>
                 </div>
