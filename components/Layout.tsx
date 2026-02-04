@@ -9,22 +9,21 @@ import {
 interface LayoutProps {
   children: React.ReactNode;
   role: 'user' | 'agent';
-  onSwitchRole: () => void;
   onOpenHelp: () => void;
   pendingCount?: number;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, role, onSwitchRole, onOpenHelp, pendingCount = 0 }) => {
+const Layout: React.FC<LayoutProps> = ({ children, role, onOpenHelp, pendingCount = 0 }) => {
   return (
     <div className="flex h-screen w-full bg-[#f5f5f5] font-sans">
       {/* Barra lateral estilo Teams */}
       <div className="w-[68px] bg-[#33344a] flex flex-col items-center py-4 space-y-6 text-gray-300 shrink-0">
-        <div className={`p-2 rounded cursor-pointer transition-all ${role === 'user' ? 'bg-[#5b5fc7] text-white' : 'hover:bg-[#44455e]'}`}>
+        <div className={`p-2 rounded transition-all ${role === 'user' ? 'bg-[#5b5fc7] text-white' : 'hover:bg-[#44455e]'}`}>
           <MessageSquare size={24} />
           <span className="text-[10px] block text-center mt-1">Soporte</span>
         </div>
         {role === 'agent' && (
-          <div className="p-2 bg-[#5b5fc7] text-white rounded cursor-pointer relative">
+          <div className="p-2 bg-[#5b5fc7] text-white rounded relative">
             <Users size={24} />
             <span className="text-[10px] block text-center mt-1">Cola</span>
             {pendingCount > 0 && (
@@ -49,7 +48,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onSwitchRole, onOpenHel
         {/* Cabecera superior */}
         <header className="h-[48px] bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0">
           <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2" onClick={onSwitchRole} style={{cursor: 'pointer'}}>
+            <div className="flex items-center space-x-2">
               <div className="w-6 h-6 bg-[#5b5fc7] rounded-md flex items-center justify-center">
                 <MessageSquare size={14} className="text-white" />
               </div>
