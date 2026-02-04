@@ -11,7 +11,7 @@ export interface SupportRequest {
   createdAt: number;
   startedAt?: number;
   completedAt?: number;
-  priority: 'low' | 'medium' | 'high';
+  priority: 'low' | 'medium' | 'high' | 'urgent';
   category?: string;
   aiSummary?: string;
   agentId?: string;
