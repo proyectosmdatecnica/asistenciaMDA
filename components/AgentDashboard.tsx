@@ -3,7 +3,7 @@ import { SupportRequest, QueueStats } from '../types';
 import { 
   Clock, CheckCircle, Search, Activity, AlertCircle, 
   LayoutGrid, List, Settings, Trash2, PlayCircle,
-  MessageCircle, RotateCcw, XCircle, Calendar
+  MessageCircle, RotateCcw, XCircle, Calendar, User
 } from 'lucide-react';
 
 interface AgentDashboardProps {
@@ -104,10 +104,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
 
           {activeTab === 'queue' && (
             <div className="flex bg-gray-50 p-1 rounded-xl shrink-0">
-              <button onClick={() => setViewMode('cards')} className={`p-2 rounded-lg transition-all ${viewMode === 'cards' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>
+              <button onClick={() => setViewMode('cards')} className={`p-2 rounded-lg transition-all ${viewMode === 'cards' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`} title="Vista de Tarjetas">
                 <LayoutGrid size={18} />
               </button>
-              <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>
+              <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`} title="Vista de Grilla">
                 <List size={18} />
               </button>
             </div>
@@ -132,16 +132,16 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       </div>
                     </div>
                     <div className="flex space-x-1.5">
-                      <button onClick={() => onUpdateStatus(req.id, 'waiting')} className="bg-gray-100 text-gray-500 p-2 rounded-xl hover:bg-gray-200 transition-all" title="Volver a la cola"><RotateCcw size={16}/></button>
-                      <button onClick={() => onUpdateStatus(req.id, 'cancelled')} className="bg-red-50 text-red-500 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all" title="No Solucionado"><XCircle size={16}/></button>
-                      <button onClick={() => onUpdateStatus(req.id, 'completed')} className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all" title="Solucionado"><CheckCircle size={16}/></button>
+                      <button onClick={() => onUpdateStatus(req.id, 'waiting')} className="bg-gray-100 text-gray-500 p-2 rounded-xl hover:bg-gray-200 transition-all" title="Devolver a la lista de espera (Re-encolar)"><RotateCcw size={16}/></button>
+                      <button onClick={() => onUpdateStatus(req.id, 'cancelled')} className="bg-red-50 text-red-500 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all" title="Cerrar como No Solucionado / Cancelado"><XCircle size={16}/></button>
+                      <button onClick={() => onUpdateStatus(req.id, 'completed')} className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all" title="Finalizar como Solucionado / Resuelto"><CheckCircle size={16}/></button>
                     </div>
                   </div>
                   <p className="text-[11px] font-black text-gray-700 mb-2">{req.subject}</p>
                   <PriorityBadge priority={req.priority} />
                   <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-50">
                     <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-3 py-1 rounded-lg flex items-center"><Clock size={10} className="mr-1.5"/> {getElapsedTime(req.startedAt || req.createdAt)}</span>
-                    <button onClick={() => openTeamsChat(req.userId, req.id)} className="text-[10px] font-black text-indigo-600 hover:bg-indigo-50 px-3 py-1 rounded-lg uppercase">Contactar</button>
+                    <button onClick={() => openTeamsChat(req.userId, req.id)} className="text-[10px] font-black text-indigo-600 hover:bg-indigo-50 px-3 py-1 rounded-lg uppercase" title="Abrir chat de Teams con el usuario">Contactar</button>
                   </div>
                 </div>
               ))}
@@ -156,11 +156,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                        <h4 className="text-xs font-black text-gray-900">{req.userName}</h4>
                        {req.priority === 'urgent' && <AlertCircle size={12} className="text-red-600 animate-bounce" />}
                     </div>
-                    <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className={`text-[9px] font-black px-4 py-2 rounded-xl transition-all ${req.priority === 'urgent' ? 'bg-red-600 text-white' : 'bg-indigo-600 text-white'}`}>TOMAR</button>
+                    <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className={`text-[9px] font-black px-4 py-2 rounded-xl transition-all ${req.priority === 'urgent' ? 'bg-red-600 text-white shadow-red-200' : 'bg-indigo-600 text-white shadow-indigo-100 hover:shadow-indigo-200 hover:scale-105'}`} title="Asignarme este ticket y comenzar atención">TOMAR CASO</button>
                   </div>
                   <PriorityBadge priority={req.priority} />
                   {req.aiSummary && (
-                    <div className="p-3 bg-gray-50 rounded-xl mt-3">
+                    <div className="p-3 bg-gray-50 rounded-xl mt-3" title={`Resumen completo de la IA: ${req.aiSummary}`}>
                       <p className="text-[10px] font-bold text-gray-600 leading-snug"><span className="font-black text-indigo-600 uppercase mr-1">Resumen:</span>{req.aiSummary}</p>
                     </div>
                   )}
@@ -179,6 +179,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                     <th className="p-5 font-black text-gray-400 uppercase text-[9px] tracking-widest">Asunto / Resumen IA</th>
                     <th className="p-5 font-black text-gray-400 uppercase text-[9px] tracking-widest">Prioridad</th>
                     <th className="p-5 font-black text-gray-400 uppercase text-[9px] tracking-widest">Estado</th>
+                    <th className="p-5 font-black text-gray-400 uppercase text-[9px] tracking-widest">Responsable</th>
                     <th className="p-5 font-black text-gray-400 uppercase text-[9px] tracking-widest">Tiempo</th>
                     <th className="p-5 font-black text-gray-400 uppercase text-[9px] tracking-widest text-center">Acciones</th>
                   </tr>
@@ -195,7 +196,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                             <span className="text-xs font-black text-gray-900">{req.userName}</span>
                           </div>
                         </td>
-                        <td className="p-5 max-w-xs">
+                        <td className="p-5 max-w-xs cursor-help" title={`Asunto Original: ${req.subject}\n\nResumen IA: ${req.aiSummary || 'No disponible'}`}>
                           <p className="text-xs font-bold text-gray-800 truncate">{req.subject}</p>
                           {req.aiSummary && <p className="text-[10px] text-indigo-500 font-bold truncate opacity-80 mt-0.5">{req.aiSummary}</p>}
                         </td>
@@ -205,18 +206,28 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                             {isInProgress ? 'Atendiendo' : 'En Cola'}
                           </span>
                         </td>
+                        <td className="p-5">
+                          {req.agentName ? (
+                            <div className="flex items-center space-x-2">
+                              <User size={12} className="text-indigo-400" />
+                              <span className="text-[10px] font-black text-gray-700">{req.agentName}</span>
+                            </div>
+                          ) : (
+                            <span className="text-[9px] font-bold text-gray-300 italic">Sin asignar</span>
+                          )}
+                        </td>
                         <td className="p-5 text-[10px] font-black text-gray-400">{getElapsedTime(req.startedAt || req.createdAt)}</td>
                         <td className="p-5 text-center">
                           <div className="flex items-center justify-center space-x-1.5">
                             {isInProgress ? (
                               <>
-                                <button onClick={() => onUpdateStatus(req.id, 'waiting')} className="p-2 bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition-all shadow-sm"><RotateCcw size={14}/></button>
-                                <button onClick={() => onUpdateStatus(req.id, 'cancelled')} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all shadow-sm"><XCircle size={14}/></button>
-                                <button onClick={() => onUpdateStatus(req.id, 'completed')} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all shadow-sm"><CheckCircle size={14}/></button>
-                                <button onClick={() => openTeamsChat(req.userId, req.id)} className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-600 hover:text-white transition-all shadow-sm"><MessageCircle size={14}/></button>
+                                <button onClick={() => onUpdateStatus(req.id, 'waiting')} className="p-2 bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition-all shadow-sm" title="Devolver ticket a la cola general"><RotateCcw size={14}/></button>
+                                <button onClick={() => onUpdateStatus(req.id, 'cancelled')} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all shadow-sm" title="Marcar como No Solucionado / Cerrar"><XCircle size={14}/></button>
+                                <button onClick={() => onUpdateStatus(req.id, 'completed')} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all shadow-sm" title="Marcar como Solucionado / Resuelto"><CheckCircle size={14}/></button>
+                                <button onClick={() => openTeamsChat(req.userId, req.id)} className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-600 hover:text-white transition-all shadow-sm" title="Contactar al usuario por chat de Teams"><MessageCircle size={14}/></button>
                               </>
                             ) : (
-                              <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className={`p-2 flex items-center space-x-2 rounded-lg font-black text-[10px] uppercase tracking-tighter shadow-sm transition-all ${req.priority === 'urgent' ? 'bg-red-600 text-white' : 'bg-indigo-600 text-white'}`}>
+                              <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className={`p-2 flex items-center space-x-2 rounded-lg font-black text-[10px] uppercase tracking-tighter shadow-sm transition-all ${req.priority === 'urgent' ? 'bg-red-600 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`} title="Asignarme este caso para iniciar atención">
                                 <PlayCircle size={14}/> <span>TOMAR</span>
                               </button>
                             )}
@@ -245,7 +256,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
               {agents.map(email => (
                 <div key={email} className="flex items-center justify-between p-5 bg-gray-50 rounded-2xl border border-gray-100 group">
                   <span className="text-sm font-black text-gray-700">{email}</span>
-                  <button onClick={() => onManageAgent('remove', email)} className="text-gray-300 group-hover:text-red-400 p-2 transition-colors"><Trash2 size={16}/></button>
+                  <button onClick={() => onManageAgent('remove', email)} className="text-gray-300 group-hover:text-red-400 p-2 transition-colors" title="Eliminar agente"><Trash2 size={16}/></button>
                 </div>
               ))}
             </div>
@@ -273,7 +284,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                     <tr key={req.id} className="hover:bg-gray-50 transition-colors">
                       <td className="p-6 font-black text-indigo-400 text-[10px]">{req.id}</td>
                       <td className="p-6 font-black text-gray-900">{req.userName}</td>
-                      <td className="p-6 font-bold text-gray-600 max-w-[200px] truncate">{req.subject}</td>
+                      <td className="p-6 font-bold text-gray-600 max-w-[200px] truncate cursor-help" title={req.subject}>{req.subject}</td>
                       <td className="p-6"><PriorityBadge priority={req.priority} /></td>
                       <td className="p-6 font-black text-indigo-600">{req.agentName || '-'}</td>
                       <td className="p-6 font-bold text-gray-400 flex items-center"><Calendar size={10} className="mr-1.5"/> {formatDate(req.createdAt)}</td>
