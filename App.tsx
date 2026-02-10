@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Layout from './components/Layout';
 import AgentDashboard from './components/AgentDashboard';
 import UserRequestView from './components/UserRequestView';
@@ -21,37 +21,6 @@ const App: React.FC = () => {
   
   const prevWaitingCount = useRef(0);
 
-  // Lógica de Notificación para Microsoft Teams
-  const syncTeamsNotification = useCallback((count: number) => {
-    const teams = (window as any).microsoftTeams;
-    if (!isTeamsReady || !teams?.app) return;
-
-    // Solo los agentes autorizados deben ver notificaciones en el icono
-    const isAuthorizedAgent = authorizedAgents.some(a => a.toLowerCase() === currentUserId.toLowerCase());
-    const finalCount = (isAuthorizedAgent || role === 'agent') ? count : 0;
-
-    try {
-      if (teams.app.setBadgeCount) {
-        teams.app.setBadgeCount(finalCount).catch(() => {
-          console.debug("Teams Badge falló - Posible restricción de permisos o app no anclada.");
-        });
-      }
-      
-      if (finalCount > 0) {
-        document.title = `(${finalCount}) Soporte IT`;
-      } else {
-        document.title = `Soporte IT`;
-      }
-    } catch (err) {
-      console.debug("Error al acceder a la API de Badge de Teams");
-    }
-  }, [isTeamsReady, authorizedAgents, currentUserId, role]);
-
-  useEffect(() => {
-    const waitingCount = requests.filter(r => r.status === 'waiting').length;
-    syncTeamsNotification(waitingCount);
-  }, [requests, syncTeamsNotification]);
-
   const refreshData = useCallback(async (silent = false) => {
     if (!silent) setIsSyncing(true);
     try {
@@ -65,25 +34,25 @@ const App: React.FC = () => {
       setLastSyncStatus('online');
       setCountdown(15);
 
-      const waitingCount = data.filter(r => r.status === 'waiting').length;
-      syncTeamsNotification(waitingCount);
-
-      if (agents.some(a => a.toLowerCase() === currentUserId.toLowerCase()) && role !== 'agent') {
+      if (agents.some(a => a.toLowerCase() === currentUserId.toLowerCase())) {
         setRole('agent');
       }
 
-      if (role === 'agent' && waitingCount > prevWaitingCount.current) {
-        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
-        audio.volume = 0.4;
-        audio.play().catch(() => {});
+      if (role === 'agent') {
+        const currentWaiting = data.filter(r => r.status === 'waiting').length;
+        if (currentWaiting > prevWaitingCount.current) {
+          const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
+          audio.volume = 0.4;
+          audio.play().catch(() => {});
+        }
+        prevWaitingCount.current = currentWaiting;
       }
-      prevWaitingCount.current = waitingCount;
     } catch (e) {
       setLastSyncStatus('offline');
     } finally {
       if (!silent) setIsSyncing(false);
     }
-  }, [role, currentUserId, syncTeamsNotification]);
+  }, [role, currentUserId]);
 
   useEffect(() => {
     const init = async () => {
@@ -97,11 +66,10 @@ const App: React.FC = () => {
             setCurrentUserId(upn);
             setCurrentUserName(context.user.displayName || upn);
           }
-          setIsTeamsReady(true);
-        } else {
-          setIsTeamsReady(true);
         }
       } catch (e) {
+        console.error("Teams Init Error", e);
+      } finally {
         setIsTeamsReady(true);
       }
     };
@@ -128,25 +96,33 @@ const App: React.FC = () => {
   }, [refreshData]);
 
   const stats = useMemo<QueueStats>(() => {
+    // Calculamos el timestamp del inicio del día de hoy (medianoche)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const startOfToday = today.getTime();
+
     const completed = requests.filter(r => r.status === 'completed');
+    
+    // Filtrar solo los completados que ocurrieron hoy
+    const completedTodayCount = completed.filter(r => 
+      r.completedAt && Number(r.completedAt) >= startOfToday
+    ).length;
+
     const active = requests.filter(r => r.status === 'waiting' || r.status === 'in-progress');
+    
     let avgMins = 5;
     if (completed.length > 0) {
+      // Promedio basado en los últimos tickets para mayor realismo
       const totalWait = completed.reduce((acc, curr) => acc + (Number(curr.startedAt || curr.completedAt || Date.now()) - Number(curr.createdAt)), 0);
       avgMins = Math.max(2, Math.round((totalWait / completed.length) / 60000));
     }
-    return { averageWaitTime: avgMins, completedToday: completed.length, activeRequests: active.length };
+    
+    return { 
+      averageWaitTime: avgMins, 
+      completedToday: completedTodayCount, 
+      activeRequests: active.length 
+    };
   }, [requests]);
-
-  const handleUpdateStatus = useCallback(async (id: string, newStatus: SupportRequest['status']) => {
-    setIsSyncing(true);
-    const agentData = newStatus === 'in-progress' 
-      ? { agentId: currentUserId, agentName: currentUserName } 
-      : (newStatus === 'waiting' ? { agentId: '', agentName: '' } : {});
-      
-    if (await storageService.updateRequestStatus(id, newStatus, agentData)) refreshData(true);
-    setIsSyncing(false);
-  }, [currentUserId, currentUserName, refreshData]);
 
   const handleCreateOrUpdate = useCallback(async (data: Partial<SupportRequest>, id?: string) => {
     setIsSyncing(true);
@@ -157,6 +133,13 @@ const App: React.FC = () => {
       success = await storageService.saveRequest({ ...data, userId: currentUserId, userName: currentUserName });
     }
     if (success) refreshData(true);
+    setIsSyncing(false);
+  }, [currentUserId, currentUserName, refreshData]);
+
+  const handleUpdateStatus = useCallback(async (id: string, newStatus: SupportRequest['status']) => {
+    setIsSyncing(true);
+    const agentData = newStatus === 'in-progress' ? { agentId: currentUserId, agentName: currentUserName } : {};
+    if (await storageService.updateRequestStatus(id, newStatus, agentData)) refreshData(true);
     setIsSyncing(false);
   }, [currentUserId, currentUserName, refreshData]);
 
@@ -175,11 +158,7 @@ const App: React.FC = () => {
   if (!isTeamsReady) return <div className="h-screen w-full flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-[#5b5fc7]" size={40} /></div>;
 
   return (
-    <Layout 
-      role={role} 
-      onOpenHelp={() => setIsHelpOpen(true)}
-      pendingCount={requests.filter(r => r.status === 'waiting').length}
-    >
+    <Layout role={role} onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')} onOpenHelp={() => setIsHelpOpen(true)}>
       <div className="relative min-h-full pb-20">
         <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-3 bg-white px-5 py-3 rounded-full shadow-2xl border border-gray-100 text-[11px] font-black group transition-all">
           <div className="relative">
