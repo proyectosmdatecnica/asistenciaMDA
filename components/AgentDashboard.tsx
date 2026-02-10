@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { SupportRequest, QueueStats } from '../types';
 import { 
-  Clock, CheckCircle, Search, Zap, List, LayoutGrid, Settings, Plus, Trash2, Activity, MessageCircle
+  Clock, CheckCircle, Search, Zap, List, LayoutGrid, Settings, Plus, Trash2, Activity, MessageCircle, RotateCcw, XCircle
 } from 'lucide-react';
 
 interface AgentDashboardProps {
@@ -78,59 +78,95 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
             <Search size={14} className="text-gray-400 mr-2" />
             <input type="text" placeholder="Filtrar..." className="bg-transparent border-none outline-none text-xs font-bold w-full" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
-          {activeTab === 'queue' && (
-            <div className="flex bg-gray-100 p-1 rounded-xl shrink-0">
-              <button onClick={() => setViewMode('standard')} className={`p-2 rounded-lg ${viewMode === 'standard' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-400'}`}><List size={16}/></button>
-              <button onClick={() => setViewMode('compact')} className={`p-2 rounded-lg ${viewMode === 'compact' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-400'}`}><LayoutGrid size={16}/></button>
-            </div>
-          )}
         </div>
       </div>
 
       {activeTab === 'queue' ? (
-        <div className={viewMode === 'compact' ? "grid grid-cols-1 md:grid-cols-3 gap-6" : "grid grid-cols-1 lg:grid-cols-2 gap-8"}>
-          {/* En Proceso Section */}
-          <div className={viewMode === 'compact' ? "md:col-span-1 space-y-4" : "space-y-5"}>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* En Atención Section */}
+          <div className="space-y-5">
             <h3 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest px-2">En Atención ({inProgress.length})</h3>
             {inProgress.map(req => (
               <div key={req.id} className="bg-white border-2 border-indigo-100 rounded-[2rem] p-5 shadow-lg animate-in slide-in-from-left-4">
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black">{req.userName.charAt(0)}</div>
-                    <div><p className="text-xs font-black text-gray-900 leading-none">{req.userName}</p><p className="text-[9px] text-indigo-400 font-bold mt-1 uppercase">Ticket {req.id}</p></div>
+                    <div>
+                      <p className="text-xs font-black text-gray-900 leading-none">{req.userName}</p>
+                      <p className="text-[9px] text-indigo-400 font-bold mt-1 uppercase">Ticket {req.id}</p>
+                    </div>
                   </div>
-                  <button onClick={() => onUpdateStatus(req.id, 'completed')} className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"><CheckCircle size={16}/></button>
+                  <div className="flex space-x-2">
+                    <button 
+                      title="Volver a la cola"
+                      onClick={() => onUpdateStatus(req.id, 'waiting')} 
+                      className="bg-gray-100 text-gray-500 p-2 rounded-xl hover:bg-gray-200 transition-all"
+                    >
+                      <RotateCcw size={16}/>
+                    </button>
+                    <button 
+                      title="Cancelar Ticket"
+                      onClick={() => onUpdateStatus(req.id, 'cancelled')} 
+                      className="bg-red-50 text-red-400 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all"
+                    >
+                      <XCircle size={16}/>
+                    </button>
+                    <button 
+                      title="Cerrar como Solucionado"
+                      onClick={() => onUpdateStatus(req.id, 'completed')} 
+                      className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"
+                    >
+                      <CheckCircle size={16}/>
+                    </button>
+                  </div>
                 </div>
-                <p className="text-[11px] font-black text-gray-700 line-clamp-2 mb-3">{req.subject}</p>
+                <p className="text-[11px] font-black text-gray-700 line-clamp-2 mb-1">{req.subject}</p>
+                <p className="text-[10px] text-gray-500 mb-3 italic line-clamp-1">{req.description}</p>
                 <div className="flex items-center justify-between pt-3 border-t border-gray-50">
-                  <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-3 py-1 rounded-lg">{getElapsedTime(req.startedAt || req.createdAt)}</span>
-                  <button onClick={() => openTeamsChat(req.userId, req.id)} className="text-[10px] font-black text-indigo-600 hover:bg-indigo-50 px-3 py-1 rounded-lg uppercase">Contactar</button>
+                  <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-3 py-1 rounded-lg">Tiempo: {getElapsedTime(req.startedAt || req.createdAt)}</span>
+                  <button onClick={() => openTeamsChat(req.userId, req.id)} className="text-[10px] font-black text-indigo-600 hover:bg-indigo-50 px-3 py-1 rounded-lg uppercase flex items-center space-x-1">
+                    <MessageCircle size={12}/>
+                    <span>Contactar</span>
+                  </button>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* En Espera Section */}
-          <div className={viewMode === 'compact' ? "md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-5"}>
-            <h3 className="text-[10px] font-black text-amber-400 uppercase tracking-widest px-2 col-span-full">Lista de Espera ({waiting.length})</h3>
+          {/* Lista de Espera Section */}
+          <div className="space-y-5">
+            <h3 className="text-[10px] font-black text-amber-400 uppercase tracking-widest px-2">Lista de Espera ({waiting.length})</h3>
             {waiting.map(req => (
-              <div key={req.id} className={`bg-white rounded-[2rem] p-5 border-2 animate-in slide-in-from-right-4 ${req.priority === 'high' ? 'border-red-100 shadow-red-50' : 'border-gray-50 shadow-sm'}`}>
+              <div 
+                key={req.id} 
+                className={`bg-white rounded-[2rem] p-5 border-2 group transition-all animate-in slide-in-from-right-4 ${req.priority === 'high' ? 'border-red-100 shadow-red-50' : 'border-gray-50 shadow-sm'}`}
+                title={`DETALLE COMPLETO:\n${req.description || 'Sin descripción'}`}
+              >
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <h4 className="text-xs font-black text-gray-900 mb-1">{req.userName}</h4>
                     <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase ${req.priority === 'high' ? 'bg-red-500 text-white' : 'bg-amber-100 text-amber-700'}`}>{req.priority}</span>
                   </div>
-                  <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className="bg-indigo-600 text-white text-[9px] font-black px-4 py-2 rounded-xl shadow-lg">TOMAR</button>
+                  <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className="bg-indigo-600 text-white text-[9px] font-black px-4 py-2 rounded-xl shadow-lg hover:bg-indigo-700 transition-colors">TOMAR</button>
                 </div>
+                
+                {/* Información Prioritaria: Lo que escribió el usuario */}
+                <div className="space-y-1 mb-3">
+                   <p className="text-[11px] font-black text-gray-800 line-clamp-1">{req.subject}</p>
+                   <p className="text-[10px] text-gray-500 line-clamp-2 italic group-hover:line-clamp-none transition-all cursor-help">
+                     {req.description || "Sin descripción adicional."}
+                   </p>
+                </div>
+
+                {/* Resumen IA como ayuda secundaria */}
                 {req.aiSummary && (
-                  <div className="bg-amber-50/50 p-3 rounded-xl mb-2">
-                    <p className="text-[10px] text-amber-900 leading-snug font-bold">
-                      <span className="text-amber-600 font-black uppercase mr-1">Resumen caso:</span>
+                  <div className="bg-gray-50 p-2 rounded-xl border border-gray-100">
+                    <p className="text-[9px] text-gray-500 leading-snug font-bold">
+                      <span className="text-indigo-400 font-black uppercase mr-1">IA:</span>
                       {req.aiSummary}
                     </p>
                   </div>
                 )}
-                {viewMode === 'standard' && <p className="text-[10px] text-gray-500 italic px-1">{req.description || "Sin descripción adicional."}</p>}
               </div>
             ))}
           </div>
@@ -178,9 +214,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
         </div>
       ) : (
         /* Historial Table */
-        <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm">
+        <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm animate-in fade-in">
            <table className="w-full text-left text-xs border-collapse">
-              <thead><tr className="bg-gray-50 border-b border-gray-100"><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Usuario</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Asunto</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Agente</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Cierre</th></tr></thead>
+              <thead><tr className="bg-gray-50 border-b border-gray-100"><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Usuario</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Asunto</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Agente</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Cierre</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Estado</th></tr></thead>
               <tbody className="divide-y divide-gray-50">
                 {completed.map(req => (
                   <tr key={req.id} className="hover:bg-gray-50 transition-colors">
@@ -192,6 +228,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                         day: '2-digit', month: '2-digit', year: 'numeric',
                         hour: '2-digit', minute: '2-digit'
                       }) : '-'}
+                    </td>
+                    <td className="p-6">
+                      <span className={`text-[8px] font-black px-2 py-1 rounded uppercase ${req.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                        {req.status === 'completed' ? 'RESUELTO' : 'CANCELADO'}
+                      </span>
                     </td>
                   </tr>
                 ))}
