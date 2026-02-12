@@ -3,10 +3,10 @@
   "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
   "manifestVersion": "1.16",
   "version": "1.0.2",
-  "id": "0c202d57-dce0-4fa9-a4a7-3bb724d3af53",
+  "id": "dd371e66-6e96-4487-bcb7-3f10755507b6",
   "packageName": "com.soporte.interno.cola",
   "developer": {
-    "name": "Asistencia Tecnica - QA",
+    "name": "Tickets MDA Tecnica - QA",
     "websiteUrl": "https://www.microsoft.com",
     "privacyUrl": "https://www.microsoft.com/privacy",
     "termsOfUseUrl": "https://www.microsoft.com/terms"
@@ -16,7 +16,7 @@
     "outline": "outline.png"
   },
   "name": {
-    "short": "Asistencia Tecnica - QA",
+    "short": "Tickets MDA Tecnica - QA",
     "full": "Cola de Asistencia Técnica - QA"
   },
   "description": {
