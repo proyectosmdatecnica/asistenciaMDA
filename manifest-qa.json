@@ -1,0 +1,45 @@
+
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.16",
+  "version": "1.0.2",
+  "id": "eb384eb8-4ed3-4a2c-b657-7a8982f82c61",
+  "packageName": "com.soporte.interno.cola",
+  "developer": {
+    "name": "Asistencia Tecnica MDA Interno - QA",
+    "websiteUrl": "https://www.microsoft.com",
+    "privacyUrl": "https://www.microsoft.com/privacy",
+    "termsOfUseUrl": "https://www.microsoft.com/terms"
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "name": {
+    "short": "Asistencia Tecnica MDA - QA",
+    "full": "Cola de Asistencia Técnica Interna - QA"
+  },
+  "description": {
+    "short": "Gestión de cola para soporte técnico.",
+    "full": "Aplicación para gestionar solicitudes de soporte técnico interno con tiempos de espera y triaje automático."
+  },
+  "accentColor": "#5b5fc7",
+  "staticTabs": [
+    {
+      "entityId": "supportTab",
+      "name": "Cola de Asistencia",
+      "contentUrl": "https://black-pond-084e07c0f-2.eastus2.1.azurestaticapps.net/",
+      "websiteUrl": "https://black-pond-084e07c0f-2.eastus2.1.azurestaticapps.net/",
+      "scopes": ["personal", "team", "groupChat"]
+    }
+  ],
+  "configurableTabs": [],
+  "permissions": [
+    "identity",
+    "messageTeamMembers"
+  ],
+  "validDomains": [
+    "black-pond-084e07c0f-2.eastus2.1.azurestaticapps.net",
+    "*.azurestaticapps.net"
+  ]
+}
