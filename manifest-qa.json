@@ -1,0 +1,45 @@
+
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.16",
+  "version": "1.0.2",
+  "id": "dd371e66-6e96-4487-bcb7-3f10755507b6",
+  "packageName": "com.soporte.interno.cola",
+  "developer": {
+    "name": "Tickets MDA Tecnica - QA",
+    "websiteUrl": "https://www.microsoft.com",
+    "privacyUrl": "https://www.microsoft.com/privacy",
+    "termsOfUseUrl": "https://www.microsoft.com/terms"
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "name": {
+    "short": "Tickets MDA Tecnica - QA",
+    "full": "Cola de Asistencia Técnica - QA"
+  },
+  "description": {
+    "short": "Gestión de cola para soporte técnico.",
+    "full": "Aplicación para gestionar solicitudes de soporte técnico interno con tiempos de espera y triaje automático."
+  },
+  "accentColor": "#5b5fc7",
+  "staticTabs": [
+    {
+      "entityId": "supportTab",
+      "name": "Cola de Asistencia",
+      "contentUrl": "https://black-pond-084e07c0f-3.eastus2.1.azurestaticapps.net/",
+      "websiteUrl": "https://black-pond-084e07c0f-3.eastus2.1.azurestaticapps.net/",
+      "scopes": ["personal", "team", "groupChat"]
+    }
+  ],
+  "configurableTabs": [],
+  "permissions": [
+    "identity",
+    "messageTeamMembers"
+  ],
+  "validDomains": [
+    "black-pond-084e07c0f-3.eastus2.1.azurestaticapps.net",
+    "*.azurestaticapps.net"
+  ]
+}
