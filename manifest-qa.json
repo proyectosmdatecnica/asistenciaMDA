@@ -3,7 +3,7 @@
   "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
   "manifestVersion": "1.16",
   "version": "1.0.2",
-  "id": "eb384eb8-4ed3-4a2c-b657-7a8982f82c61",
+  "id": "0c202d57-dce0-4fa9-a4a7-3bb724d3af53",
   "packageName": "com.soporte.interno.cola",
   "developer": {
     "name": "Asistencia Tecnica - QA",
@@ -28,8 +28,8 @@
     {
       "entityId": "supportTab",
       "name": "Cola de Asistencia",
-      "contentUrl": "https://black-pond-084e07c0f-2.eastus2.1.azurestaticapps.net/",
-      "websiteUrl": "https://black-pond-084e07c0f-2.eastus2.1.azurestaticapps.net/",
+      "contentUrl": "https://black-pond-084e07c0f-3.eastus2.1.azurestaticapps.net/",
+      "websiteUrl": "https://black-pond-084e07c0f-3.eastus2.1.azurestaticapps.net/",
       "scopes": ["personal", "team", "groupChat"]
     }
   ],
@@ -39,7 +39,7 @@
     "messageTeamMembers"
   ],
   "validDomains": [
-    "black-pond-084e07c0f-2.eastus2.1.azurestaticapps.net",
+    "black-pond-084e07c0f-3.eastus2.1.azurestaticapps.net",
     "*.azurestaticapps.net"
   ]
 }
