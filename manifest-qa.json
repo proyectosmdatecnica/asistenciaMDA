@@ -6,7 +6,7 @@
   "id": "eb384eb8-4ed3-4a2c-b657-7a8982f82c61",
   "packageName": "com.soporte.interno.cola",
   "developer": {
-    "name": "Asistencia Tecnica MDA Interno - QA",
+    "name": "Asistencia Tecnica - QA",
     "websiteUrl": "https://www.microsoft.com",
     "privacyUrl": "https://www.microsoft.com/privacy",
     "termsOfUseUrl": "https://www.microsoft.com/terms"
@@ -16,8 +16,8 @@
     "outline": "outline.png"
   },
   "name": {
-    "short": "Asistencia Tecnica MDA - QA",
-    "full": "Cola de Asistencia Técnica Interna - QA"
+    "short": "Asistencia Tecnica - QA",
+    "full": "Cola de Asistencia Técnica - QA"
   },
   "description": {
     "short": "Gestión de cola para soporte técnico.",
