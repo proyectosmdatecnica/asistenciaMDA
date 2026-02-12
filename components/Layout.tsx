@@ -20,7 +20,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onOpenHelp, pendingCoun
       <div className="w-[68px] bg-[#33344a] flex flex-col items-center py-4 space-y-6 text-gray-300 shrink-0">
         <div className={`p-2 rounded transition-all ${role === 'user' ? 'bg-[#5b5fc7] text-white' : 'hover:bg-[#44455e]'}`}>
           <MessageSquare size={24} />
-          <span className="text-[10px] block text-center mt-1">Soporte</span>
+          <span className="text-[10px] block text-center mt-1">Asistencia Tecnica MDA</span>
         </div>
         {role === 'agent' && (
           <div className="p-2 bg-[#5b5fc7] text-white rounded relative">

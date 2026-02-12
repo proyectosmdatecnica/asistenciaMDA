@@ -6,7 +6,7 @@
   "id": "c62b9a70-8771-41ee-b9d1-0242ac120002",
   "packageName": "com.soporte.interno.cola",
   "developer": {
-    "name": "Soporte IT Interno",
+    "name": "Asistencia Tecnica MDA Interno",
     "websiteUrl": "https://www.microsoft.com",
     "privacyUrl": "https://www.microsoft.com/privacy",
     "termsOfUseUrl": "https://www.microsoft.com/terms"
@@ -16,7 +16,7 @@
     "outline": "outline.png"
   },
   "name": {
-    "short": "Soporte IT",
+    "short": "Asistencia Tecnica MDA",
     "full": "Cola de Asistencia Técnica Interna"
   },
   "description": {
@@ -27,7 +27,7 @@
   "staticTabs": [
     {
       "entityId": "supportTab",
-      "name": "Cola de Soporte",
+      "name": "Cola de Asistencia",
       "contentUrl": "https://black-pond-084e07c0f.1.azurestaticapps.net",
       "websiteUrl": "https://black-pond-084e07c0f.1.azurestaticapps.net",
       "scopes": ["personal", "team", "groupChat"]
