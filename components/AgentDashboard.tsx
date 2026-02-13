@@ -16,13 +16,37 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
   const [now, setNow] = useState(Date.now());
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'queue' | 'history' | 'settings'>('queue');
-  const [viewMode, setViewMode] = useState<'standard' | 'compact'>('standard');
+  const [viewMode, setViewMode] = useState<'grid' | 'standard' | 'compact'>('grid');
   const [newAgentEmail, setNewAgentEmail] = useState('');
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Load persisted viewMode (if any) or default to grid; allow manual changes
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('agentViewMode');
+      if (stored === 'grid' || stored === 'standard' || stored === 'compact') {
+        setViewMode(stored as 'grid' | 'standard' | 'compact');
+      } else {
+        setViewMode('grid');
+        localStorage.setItem('agentViewMode', 'grid');
+      }
+    } catch (e) {
+      setViewMode('grid');
+    }
+  }, []);
+
+  // persist viewMode when user toggles
+  useEffect(() => {
+    try {
+      localStorage.setItem('agentViewMode', viewMode);
+    } catch (e) {
+      // ignore storage errors
+    }
+  }, [viewMode]);
 
   const openTeamsChat = (userId: string, ticketId: string) => {
     const message = encodeURIComponent(`Hola! Te contacto por el Ticket numero ${ticketId}`);
@@ -78,98 +102,147 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
             <Search size={14} className="text-gray-400 mr-2" />
             <input type="text" placeholder="Filtrar..." className="bg-transparent border-none outline-none text-xs font-bold w-full" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
+          <div className="ml-3 flex items-center space-x-2">
+            <button onClick={() => setViewMode('grid')} title="Vista en grilla" className={`p-2 rounded-xl ${viewMode === 'grid' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-400 hover:bg-gray-100'}`}><LayoutGrid size={16} /></button>
+            <button onClick={() => setViewMode('standard')} title="Vista en tarjetas" className={`p-2 rounded-xl ${viewMode === 'standard' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-400 hover:bg-gray-100'}`}><List size={16} /></button>
+          </div>
         </div>
       </div>
 
       {activeTab === 'queue' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* En Atención Section */}
-          <div className="space-y-5">
-            <h3 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest px-2">En Atención ({inProgress.length})</h3>
-            {inProgress.map(req => (
-              <div key={req.id} className="bg-white border-2 border-indigo-100 rounded-[2rem] p-5 shadow-lg animate-in slide-in-from-left-4">
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black">{req.userName.charAt(0)}</div>
-                    <div>
-                      <p className="text-xs font-black text-gray-900 leading-none">{req.userName}</p>
-                      <p className="text-[9px] text-indigo-400 font-bold mt-1 uppercase">Ticket {req.id}</p>
+        <div>
+          {viewMode === 'grid' ? (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="p-3 text-[10px] font-black text-gray-400 uppercase">ID</th>
+                    <th className="p-3 text-[10px] font-black text-gray-400 uppercase">Usuario</th>
+                    <th className="p-3 text-[10px] font-black text-gray-400 uppercase">Asunto</th>
+                    <th className="p-3 text-[10px] font-black text-gray-400 uppercase">Prioridad</th>
+                    <th className="p-3 text-[10px] font-black text-gray-400 uppercase">Estado</th>
+                    <th className="p-3 text-[10px] font-black text-gray-400 uppercase">Agente</th>
+                    <th className="p-3 text-[10px] font-black text-gray-400 uppercase">Tiempo</th>
+                    <th className="p-3 text-[10px] font-black text-gray-400 uppercase">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {filteredRequests.map(req => (
+                    <tr key={req.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="p-3 font-black text-gray-800">{req.id}</td>
+                      <td className="p-3 text-sm font-bold text-gray-700">{req.userName}</td>
+                      <td className="p-3 text-sm text-gray-600">{req.subject}</td>
+                      <td className="p-3 text-sm">
+                        <span className={`text-[9px] font-black px-2 py-1 rounded ${req.priority === 'urgent' ? 'bg-red-600 text-white' : req.priority === 'high' ? 'bg-amber-100 text-amber-700' : req.priority === 'medium' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>{req.priority.toUpperCase()}</span>
+                      </td>
+                      <td className="p-3 text-sm font-black">
+                        <span className={`text-[9px] px-2 py-1 rounded ${req.status === 'waiting' ? 'bg-amber-50 text-amber-600' : req.status === 'in-progress' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>{req.status.toUpperCase()}</span>
+                      </td>
+                      <td className="p-3 text-sm text-indigo-600 font-black">{req.agentName || '-'}</td>
+                      <td className="p-3 text-sm text-gray-500">{getElapsedTime(req.startedAt || req.createdAt)}</td>
+                      <td className="p-3 text-sm space-x-2">
+                        {req.status === 'waiting' && <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className="bg-indigo-600 text-white px-3 py-1 rounded-md text-xs font-black">TOMAR</button>}
+                        {req.status === 'in-progress' && <button onClick={() => onUpdateStatus(req.id, 'waiting')} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-md text-xs">VOLVER</button>}
+                        <button onClick={() => onUpdateStatus(req.id, 'cancelled')} className="bg-red-50 text-red-500 px-3 py-1 rounded-md text-xs">CANCELAR</button>
+                        <button onClick={() => onUpdateStatus(req.id, 'completed')} className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-md text-xs">RESOLVER</button>
+                        <button onClick={() => openTeamsChat(req.userId, req.id)} className="text-indigo-600 text-xs ml-1">Contactar</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* En Atención Section */}
+              <div className="space-y-5">
+                <h3 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest px-2">En Atención ({inProgress.length})</h3>
+                {inProgress.map(req => (
+                  <div key={req.id} className="bg-white border-2 border-indigo-100 rounded-[2rem] p-5 shadow-lg animate-in slide-in-from-left-4">
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black">{req.userName.charAt(0)}</div>
+                        <div>
+                          <p className="text-xs font-black text-gray-900 leading-none">{req.userName}</p>
+                          <p className="text-[9px] text-indigo-400 font-bold mt-1 uppercase">Ticket {req.id}</p>
+                        </div>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button 
+                          title="Volver a la cola"
+                          onClick={() => onUpdateStatus(req.id, 'waiting')} 
+                          className="bg-gray-100 text-gray-500 p-2 rounded-xl hover:bg-gray-200 transition-all"
+                        >
+                          <RotateCcw size={16}/>
+                        </button>
+                        <button 
+                          title="Cancelar Ticket"
+                          onClick={() => onUpdateStatus(req.id, 'cancelled')} 
+                          className="bg-red-50 text-red-400 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all"
+                        >
+                          <XCircle size={16}/>
+                        </button>
+                        <button 
+                          title="Cerrar como Solucionado"
+                          onClick={() => onUpdateStatus(req.id, 'completed')} 
+                          className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"
+                        >
+                          <CheckCircle size={16}/>
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-[11px] font-black text-gray-700 line-clamp-2 mb-1">{req.subject}</p>
+                    <p className="text-[10px] text-gray-500 mb-3 italic line-clamp-1">{req.description}</p>
+                    <div className="flex items-center justify-between pt-3 border-t border-gray-50">
+                      <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-3 py-1 rounded-lg">Tiempo: {getElapsedTime(req.startedAt || req.createdAt)}</span>
+                      <button onClick={() => openTeamsChat(req.userId, req.id)} className="text-[10px] font-black text-indigo-600 hover:bg-indigo-50 px-3 py-1 rounded-lg uppercase flex items-center space-x-1">
+                        <MessageCircle size={12}/>
+                        <span>Contactar</span>
+                      </button>
                     </div>
                   </div>
-                  <div className="flex space-x-2">
-                    <button 
-                      title="Volver a la cola"
-                      onClick={() => onUpdateStatus(req.id, 'waiting')} 
-                      className="bg-gray-100 text-gray-500 p-2 rounded-xl hover:bg-gray-200 transition-all"
-                    >
-                      <RotateCcw size={16}/>
-                    </button>
-                    <button 
-                      title="Cancelar Ticket"
-                      onClick={() => onUpdateStatus(req.id, 'cancelled')} 
-                      className="bg-red-50 text-red-400 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all"
-                    >
-                      <XCircle size={16}/>
-                    </button>
-                    <button 
-                      title="Cerrar como Solucionado"
-                      onClick={() => onUpdateStatus(req.id, 'completed')} 
-                      className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"
-                    >
-                      <CheckCircle size={16}/>
-                    </button>
-                  </div>
-                </div>
-                <p className="text-[11px] font-black text-gray-700 line-clamp-2 mb-1">{req.subject}</p>
-                <p className="text-[10px] text-gray-500 mb-3 italic line-clamp-1">{req.description}</p>
-                <div className="flex items-center justify-between pt-3 border-t border-gray-50">
-                  <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-3 py-1 rounded-lg">Tiempo: {getElapsedTime(req.startedAt || req.createdAt)}</span>
-                  <button onClick={() => openTeamsChat(req.userId, req.id)} className="text-[10px] font-black text-indigo-600 hover:bg-indigo-50 px-3 py-1 rounded-lg uppercase flex items-center space-x-1">
-                    <MessageCircle size={12}/>
-                    <span>Contactar</span>
-                  </button>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          {/* Lista de Espera Section */}
-          <div className="space-y-5">
-            <h3 className="text-[10px] font-black text-amber-400 uppercase tracking-widest px-2">Lista de Espera ({waiting.length})</h3>
-            {waiting.map(req => (
-              <div 
-                key={req.id} 
-                className={`bg-white rounded-[2rem] p-5 border-2 group transition-all animate-in slide-in-from-right-4 ${req.priority === 'high' ? 'border-red-100 shadow-red-50' : 'border-gray-50 shadow-sm'}`}
-                title={`DETALLE COMPLETO:\n${req.description || 'Sin descripción'}`}
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <h4 className="text-xs font-black text-gray-900 mb-1">{req.userName}</h4>
-                    <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase ${req.priority === 'high' ? 'bg-red-500 text-white' : 'bg-amber-100 text-amber-700'}`}>{req.priority}</span>
-                  </div>
-                  <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className="bg-indigo-600 text-white text-[9px] font-black px-4 py-2 rounded-xl shadow-lg hover:bg-indigo-700 transition-colors">TOMAR</button>
-                </div>
-                
-                {/* Información Prioritaria: Lo que escribió el usuario */}
-                <div className="space-y-1 mb-3">
-                   <p className="text-[11px] font-black text-gray-800 line-clamp-1">{req.subject}</p>
-                   <p className="text-[10px] text-gray-500 line-clamp-2 italic group-hover:line-clamp-none transition-all cursor-help">
-                     {req.description || "Sin descripción adicional."}
-                   </p>
-                </div>
+              {/* Lista de Espera Section */}
+              <div className="space-y-5">
+                <h3 className="text-[10px] font-black text-amber-400 uppercase tracking-widest px-2">Lista de Espera ({waiting.length})</h3>
+                {waiting.map(req => (
+                  <div 
+                    key={req.id} 
+                    className={`bg-white rounded-[2rem] p-5 border-2 group transition-all animate-in slide-in-from-right-4 ${req.priority === 'high' ? 'border-red-100 shadow-red-50' : 'border-gray-50 shadow-sm'}`}
+                    title={`DETALLE COMPLETO:\n${req.description || 'Sin descripción'}`}
+                  >
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <h4 className="text-xs font-black text-gray-900 mb-1">{req.userName}</h4>
+                        <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase ${req.priority === 'high' ? 'bg-red-500 text-white' : 'bg-amber-100 text-amber-700'}`}>{req.priority}</span>
+                      </div>
+                      <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className="bg-indigo-600 text-white text-[9px] font-black px-4 py-2 rounded-xl shadow-lg hover:bg-indigo-700 transition-colors">TOMAR</button>
+                    </div>
+                    
+                    {/* Información Prioritaria: Lo que escribió el usuario */}
+                    <div className="space-y-1 mb-3">
+                       <p className="text-[11px] font-black text-gray-800 line-clamp-1">{req.subject}</p>
+                       <p className="text-[10px] text-gray-500 line-clamp-2 italic group-hover:line-clamp-none transition-all cursor-help">
+                         {req.description || "Sin descripción adicional."}
+                       </p>
+                    </div>
 
-                {/* Resumen IA como ayuda secundaria */}
-                {req.aiSummary && (
-                  <div className="bg-gray-50 p-2 rounded-xl border border-gray-100">
-                    <p className="text-[9px] text-gray-500 leading-snug font-bold">
-                      <span className="text-indigo-400 font-black uppercase mr-1">IA:</span>
-                      {req.aiSummary}
-                    </p>
+                    {/* Resumen IA como ayuda secundaria */}
+                    {req.aiSummary && (
+                      <div className="bg-gray-50 p-2 rounded-xl border border-gray-100">
+                        <p className="text-[9px] text-gray-500 leading-snug font-bold">
+                          <span className="text-indigo-400 font-black uppercase mr-1">IA:</span>
+                          {req.aiSummary}
+                        </p>
+                      </div>
+                    )}
                   </div>
-                )}
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
       ) : activeTab === 'settings' ? (
         <div className="max-w-3xl mx-auto space-y-8 animate-in zoom-in-95">
