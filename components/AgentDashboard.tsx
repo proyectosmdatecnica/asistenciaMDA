@@ -99,6 +99,26 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
     return '-';
   };
 
+  const priorityLabel = (p: SupportRequest['priority']) => {
+    switch (p) {
+      case 'low': return 'Baja';
+      case 'medium': return 'Media';
+      case 'high': return 'Alta';
+      case 'urgent': return 'Urgente';
+      default: return p;
+    }
+  };
+
+  const statusLabel = (s: SupportRequest['status']) => {
+    switch (s) {
+      case 'waiting': return 'En espera';
+      case 'in-progress': return 'En proceso';
+      case 'completed': return 'Resuelto';
+      case 'cancelled': return 'Cancelado';
+      default: return s;
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12 animate-in fade-in">
       {/* Stats */}
@@ -163,10 +183,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       <td className="p-3 text-sm font-bold text-gray-700">{req.userName}</td>
                       <td className="p-3 text-sm text-gray-600">{req.subject}</td>
                       <td className="p-3 text-sm">
-                        <span className={`text-[9px] font-black px-2 py-1 rounded ${req.priority === 'urgent' ? 'bg-red-600 text-white' : req.priority === 'high' ? 'bg-amber-100 text-amber-700' : req.priority === 'medium' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>{req.priority.toUpperCase()}</span>
+                        <span className={`text-[9px] font-black px-2 py-1 rounded ${req.priority === 'urgent' ? 'bg-red-600 text-white' : req.priority === 'high' ? 'bg-amber-100 text-amber-700' : req.priority === 'medium' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>{priorityLabel(req.priority)}</span>
                       </td>
                       <td className="p-3 text-sm font-black">
-                        <span className={`text-[9px] px-2 py-1 rounded ${req.status === 'waiting' ? 'bg-amber-50 text-amber-600' : req.status === 'in-progress' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>{req.status.toUpperCase()}</span>
+                        <span className={`text-[9px] px-2 py-1 rounded ${req.status === 'waiting' ? 'bg-amber-50 text-amber-600' : req.status === 'in-progress' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>{statusLabel(req.status)}</span>
                       </td>
                       <td className="p-3 text-sm text-indigo-600 font-black">{req.agentName || '-'}</td>
                       <td className="p-3 text-sm text-gray-500">{new Date(Number(req.createdAt)).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
@@ -174,10 +194,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       <td className="p-3 text-sm">
                         <div className="flex items-center space-x-2">
                           {req.status === 'waiting' && (
-                            <>
-                              <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className="bg-indigo-600 text-white text-[9px] font-black px-4 py-2 rounded-xl shadow-lg hover:bg-indigo-700 transition-colors">TOMAR</button>
-                              <button onClick={() => onUpdateStatus(req.id, 'cancelled')} className="bg-red-50 text-red-400 text-[9px] font-black px-3 py-2 rounded-xl hover:bg-red-500 hover:text-white transition-colors">CANCELAR</button>
-                            </>
+                            <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className="bg-indigo-600 text-white text-[9px] font-black px-4 py-2 rounded-xl shadow-lg hover:bg-indigo-700 transition-colors">ATENDER</button>
                           )}
 
                           {req.status === 'in-progress' && (
@@ -344,10 +361,20 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
         /* Historial Table */
         <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm animate-in fade-in">
            <table className="w-full text-left text-xs border-collapse">
-              <thead><tr className="bg-gray-50 border-b border-gray-100"><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Usuario</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Asunto</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Agente</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Cierre</th><th className="p-6 font-black text-gray-400 uppercase text-[9px]">Estado</th></tr></thead>
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    <th className="p-6 font-black text-gray-400 uppercase text-[9px]">ID</th>
+                    <th className="p-6 font-black text-gray-400 uppercase text-[9px]">Usuario</th>
+                    <th className="p-6 font-black text-gray-400 uppercase text-[9px]">Asunto</th>
+                    <th className="p-6 font-black text-gray-400 uppercase text-[9px]">Agente</th>
+                    <th className="p-6 font-black text-gray-400 uppercase text-[9px]">Cierre</th>
+                    <th className="p-6 font-black text-gray-400 uppercase text-[9px]">Estado</th>
+                  </tr>
+                </thead>
               <tbody className="divide-y divide-gray-50">
                 {completed.map(req => (
                   <tr key={req.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="p-6 font-black text-gray-900">{req.id}</td>
                     <td className="p-6 font-black text-gray-900">{req.userName}</td>
                     <td className="p-6 font-bold text-gray-600">{req.subject}</td>
                     <td className="p-6 font-black text-indigo-600">{req.agentName || '-'}</td>
@@ -359,7 +386,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                     </td>
                     <td className="p-6">
                       <span className={`text-[8px] font-black px-2 py-1 rounded uppercase ${req.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                        {req.status === 'completed' ? 'RESUELTO' : 'CANCELADO'}
+                        {statusLabel(req.status).toUpperCase()}
                       </span>
                     </td>
                   </tr>
