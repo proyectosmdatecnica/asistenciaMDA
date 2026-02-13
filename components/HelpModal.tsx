@@ -19,7 +19,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
             </div>
             <div>
               <h2 className="text-xl font-black text-gray-900">Guía del Sistema</h2>
-              <p className="text-[10px] font-black text-[#5b5fc7] uppercase tracking-widest">Asistencia Técnica Hub</p>
+              <p className="text-[10px] font-black text-[#5b5fc7] uppercase tracking-widest">Tickets MDA Tecnica Hub</p>
             </div>
           </div>
           <button onClick={onClose} className="p-3 hover:bg-gray-200 rounded-2xl transition-colors">
