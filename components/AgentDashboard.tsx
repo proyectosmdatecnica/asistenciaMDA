@@ -202,6 +202,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                               <button title="Volver a la cola" onClick={() => onUpdateStatus(req.id, 'waiting')} className="bg-gray-100 text-gray-500 p-2 rounded-xl hover:bg-gray-200 transition-all"><RotateCcw size={16}/></button>
                               <button title="Cancelar Ticket" onClick={() => onUpdateStatus(req.id, 'cancelled')} className="bg-red-50 text-red-400 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all"><XCircle size={16}/></button>
                               <button title="Cerrar como Solucionado" onClick={() => onUpdateStatus(req.id, 'completed')} className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"><CheckCircle size={16}/></button>
+                              <button onClick={() => openTeamsChat(req.userId, req.id)} className="text-[10px] font-black text-indigo-600 hover:underline flex items-center space-x-1 ml-2">
+                                <MessageCircle size={14} />
+                                <span>Contactar</span>
+                              </button>
                             </div>
                           )}
 
@@ -210,13 +214,6 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                               <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className="bg-indigo-50 text-indigo-600 text-[9px] font-black px-3 py-2 rounded-xl">REABRIR</button>
                             </div>
                           )}
-                        </div>
-
-                        <div className="mt-2">
-                          <button onClick={() => openTeamsChat(req.userId, req.id)} className="text-[10px] font-black text-indigo-600 hover:underline flex items-center space-x-1">
-                            <MessageCircle size={14} />
-                            <span>Contactar</span>
-                          </button>
                         </div>
                       </td>
                     </tr>
