@@ -149,12 +149,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                     <th className="p-3 text-[10px] font-black text-gray-400 uppercase">Prioridad</th>
                     <th className="p-3 text-[10px] font-black text-gray-400 uppercase">Estado</th>
                     <th className="p-3 text-[10px] font-black text-gray-400 uppercase">Agente</th>
+                    <th className="p-3 text-[10px] font-black text-gray-400 uppercase">Creado</th>
                     <th className="p-3 text-[10px] font-black text-gray-400 uppercase">Tiempo</th>
                     <th className="p-3 text-[10px] font-black text-gray-400 uppercase">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {filteredRequests.map(req => (
+                  {filteredRequests
+                    .filter(r => r.status === 'waiting' || r.status === 'in-progress')
+                    .map(req => (
                     <tr key={req.id} className="hover:bg-gray-50 transition-colors">
                       <td className="p-3 font-black text-gray-800">{req.id}</td>
                       <td className="p-3 text-sm font-bold text-gray-700">{req.userName}</td>
@@ -166,6 +169,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                         <span className={`text-[9px] px-2 py-1 rounded ${req.status === 'waiting' ? 'bg-amber-50 text-amber-600' : req.status === 'in-progress' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>{req.status.toUpperCase()}</span>
                       </td>
                       <td className="p-3 text-sm text-indigo-600 font-black">{req.agentName || '-'}</td>
+                      <td className="p-3 text-sm text-gray-500">{new Date(Number(req.createdAt)).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
                       <td className="p-3 text-sm text-gray-500">{renderElapsedFor(req)}</td>
                       <td className="p-3 text-sm">
                         <div className="flex items-center space-x-2">
