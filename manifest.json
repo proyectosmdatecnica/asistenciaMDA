@@ -2,9 +2,9 @@
 {
   "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
   "manifestVersion": "1.16",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "id": "c62b9a70-8771-41ee-b9d1-0242ac120002",
-  "packageName": "com.soporte.interno.cola",
+  "packageName": "com.mda.tickets",
   "developer": {
     "name": "Tickets MDA Tecnica",
     "websiteUrl": "https://www.microsoft.com",
