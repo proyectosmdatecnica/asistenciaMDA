@@ -17,7 +17,7 @@
   },
   "name": {
     "short": "Tickets MDA Tecnica - QA",
-    "full": "Tickets de Asistencia Técnica - QA"
+    "full": "Tickets MDA Tecnica - QA"
   },
   "description": {
     "short": "Gestión de cola para soporte técnico.",
@@ -27,9 +27,9 @@
   "staticTabs": [
     {
       "entityId": "supportTab",
-      "name": "Cola de Asistencia",
-      "contentUrl": "https://black-pond-084e07c0f-3.eastus2.1.azurestaticapps.net/",
-      "websiteUrl": "https://black-pond-084e07c0f-3.eastus2.1.azurestaticapps.net/",
+      "name": "Cola de Tickets MDA Tecnica",
+      "contentUrl": "https://black-pond-084e07c0f-5.eastus2.1.azurestaticapps.net/",
+      "websiteUrl": "https://black-pond-084e07c0f-5.eastus2.1.azurestaticapps.net/",
       "scopes": ["personal", "team", "groupChat"]
     }
   ],
@@ -39,7 +39,7 @@
     "messageTeamMembers"
   ],
   "validDomains": [
-    "black-pond-084e07c0f-3.eastus2.1.azurestaticapps.net",
+    "black-pond-084e07c0f-5.eastus2.1.azurestaticapps.net",
     "*.azurestaticapps.net"
   ]
 }
