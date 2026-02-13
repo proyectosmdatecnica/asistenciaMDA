@@ -28,8 +28,8 @@
     {
       "entityId": "supportTab",
       "name": "Cola de Tickets MDA Tecnica",
-      "contentUrl": "https://black-pond-084e07c0f-3.eastus2.1.azurestaticapps.net/",
-      "websiteUrl": "https://black-pond-084e07c0f-3.eastus2.1.azurestaticapps.net/",
+      "contentUrl": "https://black-pond-084e07c0f-5.eastus2.1.azurestaticapps.net/",
+      "websiteUrl": "https://black-pond-084e07c0f-5.eastus2.1.azurestaticapps.net/",
       "scopes": ["personal", "team", "groupChat"]
     }
   ],
@@ -39,7 +39,7 @@
     "messageTeamMembers"
   ],
   "validDomains": [
-    "black-pond-084e07c0f-3.eastus2.1.azurestaticapps.net",
+    "black-pond-084e07c0f-5.eastus2.1.azurestaticapps.net",
     "*.azurestaticapps.net"
   ]
 }

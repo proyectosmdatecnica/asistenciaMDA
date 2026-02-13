@@ -72,6 +72,33 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
     return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
   };
 
+  const formatDuration = (start: number, end: number) => {
+    const s = Math.max(0, Math.floor((end - start) / 1000));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+  };
+
+  const renderElapsedFor = (req: SupportRequest) => {
+    // Only run live timer while in-progress (taken). For completed/cancelled show total duration between startedAt and completedAt.
+    const started = Number(req.startedAt || 0);
+    const completed = Number(req.completedAt || 0);
+    if (req.status === 'in-progress') {
+      if (started) return getElapsedTime(started);
+      return '-';
+    }
+    if (req.status === 'completed' || req.status === 'cancelled') {
+      if (started && completed) return formatDuration(started, completed);
+      // if completed but no started timestamp, fallback to '-' or show time between created and completed
+      if (completed && req.createdAt) return formatDuration(Number(req.createdAt), completed);
+      return '-';
+    }
+    // waiting or other statuses
+    return '-';
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12 animate-in fade-in">
       {/* Stats */}
@@ -139,13 +166,37 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                         <span className={`text-[9px] px-2 py-1 rounded ${req.status === 'waiting' ? 'bg-amber-50 text-amber-600' : req.status === 'in-progress' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>{req.status.toUpperCase()}</span>
                       </td>
                       <td className="p-3 text-sm text-indigo-600 font-black">{req.agentName || '-'}</td>
-                      <td className="p-3 text-sm text-gray-500">{getElapsedTime(req.startedAt || req.createdAt)}</td>
-                      <td className="p-3 text-sm space-x-2">
-                        {req.status === 'waiting' && <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className="bg-indigo-600 text-white px-3 py-1 rounded-md text-xs font-black">TOMAR</button>}
-                        {req.status === 'in-progress' && <button onClick={() => onUpdateStatus(req.id, 'waiting')} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-md text-xs">VOLVER</button>}
-                        <button onClick={() => onUpdateStatus(req.id, 'cancelled')} className="bg-red-50 text-red-500 px-3 py-1 rounded-md text-xs">CANCELAR</button>
-                        <button onClick={() => onUpdateStatus(req.id, 'completed')} className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-md text-xs">RESOLVER</button>
-                        <button onClick={() => openTeamsChat(req.userId, req.id)} className="text-indigo-600 text-xs ml-1">Contactar</button>
+                      <td className="p-3 text-sm text-gray-500">{renderElapsedFor(req)}</td>
+                      <td className="p-3 text-sm">
+                        <div className="flex items-center space-x-2">
+                          {req.status === 'waiting' && (
+                            <>
+                              <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className="bg-indigo-600 text-white text-[9px] font-black px-4 py-2 rounded-xl shadow-lg hover:bg-indigo-700 transition-colors">TOMAR</button>
+                              <button onClick={() => onUpdateStatus(req.id, 'cancelled')} className="bg-red-50 text-red-400 text-[9px] font-black px-3 py-2 rounded-xl hover:bg-red-500 hover:text-white transition-colors">CANCELAR</button>
+                            </>
+                          )}
+
+                          {req.status === 'in-progress' && (
+                            <div className="flex items-center space-x-2">
+                              <button title="Volver a la cola" onClick={() => onUpdateStatus(req.id, 'waiting')} className="bg-gray-100 text-gray-500 p-2 rounded-xl hover:bg-gray-200 transition-all"><RotateCcw size={16}/></button>
+                              <button title="Cancelar Ticket" onClick={() => onUpdateStatus(req.id, 'cancelled')} className="bg-red-50 text-red-400 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all"><XCircle size={16}/></button>
+                              <button title="Cerrar como Solucionado" onClick={() => onUpdateStatus(req.id, 'completed')} className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"><CheckCircle size={16}/></button>
+                            </div>
+                          )}
+
+                          {(req.status === 'completed' || req.status === 'cancelled') && (
+                            <div className="flex items-center space-x-2">
+                              <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className="bg-indigo-50 text-indigo-600 text-[9px] font-black px-3 py-2 rounded-xl">REABRIR</button>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-2">
+                          <button onClick={() => openTeamsChat(req.userId, req.id)} className="text-[10px] font-black text-indigo-600 hover:underline flex items-center space-x-1">
+                            <MessageCircle size={14} />
+                            <span>Contactar</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
