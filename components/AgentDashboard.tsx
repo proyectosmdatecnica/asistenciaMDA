@@ -181,7 +181,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                     <tr key={req.id} className="hover:bg-gray-50 transition-colors">
                       <td className="p-3 font-black text-gray-800">{req.id}</td>
                       <td className="p-3 text-sm font-bold text-gray-700">{req.userName}</td>
-                      <td className="p-3 text-sm text-gray-600">{req.subject}</td>
+                      <td className="p-3 text-sm text-gray-600">
+                        <span title={(req.description && req.description.length > 0) ? `${req.subject} — ${req.description}` : req.subject} className="block truncate max-w-[28rem]">
+                          {req.subject}
+                        </span>
+                      </td>
                       <td className="p-3 text-sm">
                         <span className={`text-[9px] font-black px-2 py-1 rounded ${req.priority === 'urgent' ? 'bg-red-600 text-white' : req.priority === 'high' ? 'bg-amber-100 text-amber-700' : req.priority === 'medium' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>{priorityLabel(req.priority)}</span>
                       </td>
@@ -287,7 +291,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                         <h4 className="text-xs font-black text-gray-900 mb-1">{req.userName}</h4>
                         <span className={`text-[8px] px-2 py-0.5 rounded font-black uppercase ${req.priority === 'high' ? 'bg-red-500 text-white' : 'bg-amber-100 text-amber-700'}`}>{req.priority}</span>
                       </div>
-                      <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className="bg-indigo-600 text-white text-[9px] font-black px-4 py-2 rounded-xl shadow-lg hover:bg-indigo-700 transition-colors">TOMAR</button>
+                      <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className="bg-indigo-600 text-white text-[9px] font-black px-4 py-2 rounded-xl shadow-lg hover:bg-indigo-700 transition-colors">ATENDER</button>
                     </div>
                     
                     {/* Información Prioritaria: Lo que escribió el usuario */}

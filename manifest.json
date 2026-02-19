@@ -6,7 +6,7 @@
   "id": "c62b9a70-8771-41ee-b9d1-0242ac120002",
   "packageName": "com.mda.tickets",
   "developer": {
-    "name": "Tickets MDA Tecnica",
+    "name": "Asistencia - MDA Tecnica",
     "websiteUrl": "https://www.microsoft.com",
     "privacyUrl": "https://www.microsoft.com/privacy",
     "termsOfUseUrl": "https://www.microsoft.com/terms"
@@ -16,8 +16,8 @@
     "outline": "outline.png"
   },
   "name": {
-    "short": "Tickets MDA Tecnica",
-    "full": "Tickets MDA Tecnica"
+    "short": "Asistencia - MDA Tecnica",
+    "full": "Asistencia - MDA Tecnica"
   },
   "description": {
     "short": "Gestión de cola para soporte técnico.",
@@ -27,7 +27,7 @@
   "staticTabs": [
     {
       "entityId": "supportTab",
-      "name": "Cola de Tickets MDA Tecnica",
+      "name": "Cola de Asistencia - MDA Tecnica",
       "contentUrl": "https://black-pond-084e07c0f.1.azurestaticapps.net",
       "websiteUrl": "https://black-pond-084e07c0f.1.azurestaticapps.net",
       "scopes": ["personal", "team", "groupChat"]

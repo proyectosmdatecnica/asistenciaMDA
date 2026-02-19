@@ -20,7 +20,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onOpenHelp, pendingCoun
       <div className="w-[68px] bg-[#33344a] flex flex-col items-center py-4 space-y-6 text-gray-300 shrink-0">
         <div className={`p-2 rounded transition-all ${role === 'user' ? 'bg-[#5b5fc7] text-white' : 'hover:bg-[#44455e]'}`}>
           <MessageSquare size={24} />
-          <span className="text-[10px] block text-center mt-1">Tickets MDA Tecnica</span>
+              <span className="text-[10px] block text-center mt-1">Asistencia - MDA Tecnica</span>
         </div>
         {role === 'agent' && (
           <div className="p-2 bg-[#5b5fc7] text-white rounded relative">
@@ -52,7 +52,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onOpenHelp, pendingCoun
               <div className="w-6 h-6 bg-[#5b5fc7] rounded-md flex items-center justify-center">
                 <MessageSquare size={14} className="text-white" />
               </div>
-              <h1 className="font-bold text-gray-800 text-sm tracking-tight">Tickets MDA Tecnica Hub</h1>
+              <h1 className="font-bold text-gray-800 text-sm tracking-tight">Asistencia - MDA Tecnica Hub</h1>
             </div>
             <div className="h-4 w-[1px] bg-gray-300" />
             <div className="flex items-center space-x-2">

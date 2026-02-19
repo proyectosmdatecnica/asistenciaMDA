@@ -19,7 +19,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
             </div>
             <div>
               <h2 className="text-xl font-black text-gray-900">Guía del Sistema</h2>
-              <p className="text-[10px] font-black text-[#5b5fc7] uppercase tracking-widest">Tickets MDA Tecnica Hub</p>
+              <p className="text-[10px] font-black text-[#5b5fc7] uppercase tracking-widest">Asistencia - MDA Tecnica Hub</p>
             </div>
           </div>
           <button onClick={onClose} className="p-3 hover:bg-gray-200 rounded-2xl transition-colors">
@@ -54,8 +54,8 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
               <div className="flex items-start space-x-3 p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100">
                 <CheckCircle size={18} className="text-indigo-600 mt-0.5 shrink-0" />
                 <p className="text-xs font-medium text-indigo-900">
-                  <span className="font-black block mb-1">Tomar Casos</span>
-                  Usa el botón "Tomar Caso" para mover un ticket de la lista de espera a tu panel de atención.
+                  <span className="font-black block mb-1">Atender Casos</span>
+                  Usa el botón "Atender" para mover un ticket de la lista de espera a tu panel de atención.
                 </p>
               </div>
               <div className="flex items-start space-x-3 p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100">
