@@ -3,6 +3,7 @@ import { SupportRequest, QueueStats } from '../types';
 import { 
   Clock, CheckCircle, Search, Zap, List, LayoutGrid, Settings, Plus, Trash2, Activity, MessageCircle, RotateCcw, XCircle
 } from 'lucide-react';
+import usePendingNotifications from '../hooks/usePendingNotifications';
 
 interface AgentDashboardProps {
   requests: SupportRequest[];
@@ -18,6 +19,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
   const [activeTab, setActiveTab] = useState<'queue' | 'history' | 'settings'>('queue');
   const [viewMode, setViewMode] = useState<'grid' | 'standard' | 'compact'>('grid');
   const [newAgentEmail, setNewAgentEmail] = useState('');
+
+  // Poll for pending tickets and show desktop notifications (agents only)
+  usePendingNotifications({ pollIntervalMs: 30000, apiUrl: '/api/requests' });
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
