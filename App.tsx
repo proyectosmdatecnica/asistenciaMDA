@@ -30,6 +30,8 @@ const App: React.FC = () => {
       ]);
       
       setAuthorizedAgents(agents);
+      console.debug('[app] fetched authorizedAgents:', agents);
+      console.debug('[app] currentUserId in refreshData:', currentUserId);
       setRequests(data);
       setLastSyncStatus('online');
       setCountdown(15);
@@ -58,13 +60,24 @@ const App: React.FC = () => {
     const init = async () => {
       try {
         const teams = (window as any).microsoftTeams;
+        console.debug('[app] microsoftTeams available?', !!teams);
         if (teams) {
-          await teams.app.initialize();
-          const context = await teams.app.getContext();
-          if (context.user?.userPrincipalName) {
-            const upn = context.user.userPrincipalName.toLowerCase();
-            setCurrentUserId(upn);
-            setCurrentUserName(context.user.displayName || upn);
+          try {
+            await teams.app.initialize();
+            const context = await teams.app.getContext();
+            console.debug('[app] teams context:', context);
+            // Try multiple fallbacks for identifying the user in different hosts (desktop/web)
+            const upn = context?.user?.userPrincipalName || context?.user?.id || context?.user?.userObjectId || context?.user?.userId;
+            if (upn) {
+              const normalized = String(upn).toLowerCase();
+              setCurrentUserId(normalized);
+              setCurrentUserName(context.user.displayName || normalized);
+              console.debug('[app] set currentUserId:', normalized);
+            } else {
+              console.debug('[app] no userPrincipalName in context');
+            }
+          } catch (e) {
+            console.debug('[app] teams init/getContext failed', e);
           }
         }
       } catch (e) {
