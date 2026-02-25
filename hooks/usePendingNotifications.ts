@@ -14,12 +14,25 @@ export default function usePendingNotifications(opts: Options = {}) {
   useEffect(() => {
     if (notifySoundUrl) audioRef.current = new Audio(notifySoundUrl);
 
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+        // Ask once so the user can allow notifications from the Teams webview
+        Notification.requestPermission().then(p => console.debug('[notify] permission:', p)).catch(() => {});
+      }
+    } catch (e) {
+      // ignore
+    }
+
     let mounted = true;
 
     async function check() {
+      console.debug('[notify] checking pending tickets...');
       try {
         const resp = await fetch(apiUrl, { cache: 'no-store' });
-        if (!resp.ok) return;
+        if (!resp.ok) {
+          console.debug('[notify] fetch failed', resp.status, resp.statusText);
+          return;
+        }
         const data = await resp.json();
 
         const pending = Array.isArray(data)
@@ -27,6 +40,7 @@ export default function usePendingNotifications(opts: Options = {}) {
           : (data.count ?? 0);
 
         const prev = lastCountRef.current || 0;
+        console.debug('[notify] pending:', pending, 'prev:', prev);
         if (pending > prev) {
           if (typeof Notification !== 'undefined') {
             if (Notification.permission === 'granted') {
