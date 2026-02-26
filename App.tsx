@@ -164,6 +164,20 @@ const App: React.FC = () => {
     setIsSyncing(false);
   };
 
+  const handleAgentRegistered = async (email: string) => {
+    // Add agent on server and switch UI role locally
+    setIsSyncing(true);
+    try {
+      await storageService.addAgent(email);
+      setRole('agent');
+      await refreshData();
+    } catch (e) {
+      console.error('Error registering agent locally', e);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const activeRequestsForUser = useMemo(() => 
     requests.filter(r => r.userId === currentUserId && (r.status === 'waiting' || r.status === 'in-progress'))
   , [requests, currentUserId]);
@@ -171,7 +185,7 @@ const App: React.FC = () => {
   if (!isTeamsReady) return <div className="h-screen w-full flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-[#5b5fc7]" size={40} /></div>;
 
   return (
-    <Layout role={role} onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')} onOpenHelp={() => setIsHelpOpen(true)}>
+    <Layout role={role} onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')} onOpenHelp={() => setIsHelpOpen(true)} onAgentRegister={handleAgentRegistered}>
       <div className="relative min-h-full pb-20">
         <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-3 bg-white px-5 py-3 rounded-full shadow-2xl border border-gray-100 text-[11px] font-black group transition-all">
           <div className="relative">

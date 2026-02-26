@@ -10,10 +10,12 @@ interface LayoutProps {
   children: React.ReactNode;
   role: 'user' | 'agent';
   onOpenHelp: () => void;
+  onSwitchRole?: () => void;
+  onAgentRegister?: (email: string) => void;
   pendingCount?: number;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, role, onOpenHelp, pendingCount = 0 }) => {
+const Layout: React.FC<LayoutProps> = ({ children, role, onOpenHelp, onAgentRegister, pendingCount = 0 }) => {
   const [isDebugVisible, setIsDebugVisible] = useState(false);
 
   useEffect(() => {
@@ -47,6 +49,46 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onOpenHelp, pendingCoun
       alert(JSON.stringify(out, null, 2));
     } catch (e: any) {
       alert('Debug error: ' + (e?.message || e));
+    }
+  };
+
+  const handleJoinAgent = async () => {
+    try {
+      const code = window.prompt('Ingresá el código de agente de TI:');
+      if (!code) return;
+
+      // load public config
+      const cfgRes = await fetch('/app-config.json');
+      if (!cfgRes.ok) return alert('No se pudo validar el código (app-config.json no disponible)');
+      const cfg = await cfgRes.json();
+      if (!cfg?.agentJoinCode) return alert('Código de agente no configurado');
+      if (String(code).trim() !== String(cfg.agentJoinCode).trim()) return alert('Código incorrecto');
+
+      // try to detect email from Teams context
+      const teams = (window as any).microsoftTeams;
+      let context: any = null;
+      let detectedEmail: string | null = null;
+      if (teams && teams.app && teams.app.getContext) {
+        try { context = await teams.app.getContext(); } catch (e) { context = null; }
+      }
+      detectedEmail = context?.user?.userPrincipalName || context?.userPrincipalName || context?.loginHint || null;
+      let email = detectedEmail;
+      if (!email) {
+        email = window.prompt('No se detectó tu correo. Ingresá tu email para registrarte como agente:') || '';
+      }
+      email = (email || '').trim().toLowerCase();
+      if (!email) return alert('Email requerido para registrarse como agente');
+
+      const r = await fetch('/api/agents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email }) });
+      if (r.status === 201 || r.status === 200) {
+        alert('Registrado como agente correctamente. Recargue la página si no ve cambios.');
+        if (typeof onAgentRegister === 'function') onAgentRegister(email);
+        return;
+      }
+      const text = await r.text();
+      alert('Fallo al registrar: ' + (text || r.status));
+    } catch (e: any) {
+      alert('Error al registrar como agente: ' + (e?.message || e));
     }
   };
   return (
@@ -102,6 +144,9 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onOpenHelp, pendingCoun
           <div className="flex items-center space-x-4">
             {isDebugVisible && (
               <button onClick={handleDebugClick} className="mr-4 px-3 py-1 rounded-lg bg-gray-100 text-xs font-bold">DEBUG</button>
+            )}
+            {role === 'user' && (
+              <button onClick={handleJoinAgent} className="mr-2 px-3 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold">Soy Agente de TI</button>
             )}
             {role === 'agent' && pendingCount > 0 && (
               <div className="flex items-center bg-red-50 px-3 py-1 rounded-full text-red-600 space-x-2 animate-pulse">
