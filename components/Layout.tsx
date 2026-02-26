@@ -60,7 +60,25 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onOpenHelp, onAgentRegi
       // load public config
       const cfgRes = await fetch('/app-config.json');
       if (!cfgRes.ok) return alert('No se pudo validar el código (app-config.json no disponible)');
-      const cfg = await cfgRes.json();
+      let cfg: any = null;
+      const contentType = (cfgRes.headers.get('content-type') || '').toLowerCase();
+      if (contentType.includes('application/json')) {
+        try {
+          cfg = await cfgRes.json();
+        } catch (e) {
+          console.error('Failed parsing app-config.json as JSON', e);
+          return alert('No se pudo leer app-config.json como JSON');
+        }
+      } else {
+        // Some static hosts (or SPA rewrites) may serve HTML instead of the raw JSON file.
+        const txt = await cfgRes.text();
+        try {
+          cfg = JSON.parse(txt);
+        } catch (e) {
+          console.error('app-config.json did not return JSON; response body:', txt.slice(0,200));
+          return alert('No se pudo validar el código: app-config.json no es JSON (probablemente servido como HTML).');
+        }
+      }
       if (!cfg?.agentJoinCode) return alert('Código de agente no configurado');
       if (String(code).trim() !== String(cfg.agentJoinCode).trim()) return alert('Código incorrecto');
 
