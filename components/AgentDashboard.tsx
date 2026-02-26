@@ -4,6 +4,7 @@ import {
   Clock, CheckCircle, Search, Zap, List, LayoutGrid, Settings, Plus, Trash2, Activity, MessageCircle, RotateCcw, XCircle
 } from 'lucide-react';
 import usePendingNotifications from '../hooks/usePendingNotifications';
+import { storageService } from '../services/dataService';
 
 interface AgentDashboardProps {
   requests: SupportRequest[];
@@ -11,14 +12,16 @@ interface AgentDashboardProps {
   onUpdateStatus: (id: string, newStatus: SupportRequest['status']) => void;
   agents: string[];
   onManageAgent: (action: 'add' | 'remove', email: string) => void;
+  onRefreshAgents?: () => Promise<void>;
 }
 
-const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpdateStatus, agents, onManageAgent }) => {
+const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpdateStatus, agents, onManageAgent, onRefreshAgents }) => {
   const [now, setNow] = useState(Date.now());
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'queue' | 'history' | 'settings'>('queue');
   const [viewMode, setViewMode] = useState<'grid' | 'standard' | 'compact'>('grid');
   const [newAgentEmail, setNewAgentEmail] = useState('');
+  const [pendingRequests, setPendingRequests] = useState<string[]>([]);
 
   // Poll for pending tickets and show desktop notifications (agents only)
   usePendingNotifications({ pollIntervalMs: 30000, apiUrl: '/api/requests' });
@@ -51,6 +54,20 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
       // ignore storage errors
     }
   }, [viewMode]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadPending = async () => {
+      try {
+        const list = await storageService.fetchPendingAgents();
+        if (mounted) setPendingRequests(list.map(String));
+      } catch (e) {
+        console.debug('No se pudieron cargar solicitudes pendientes', e);
+      }
+    };
+    if (activeTab === 'settings') loadPending();
+    return () => { mounted = false; };
+  }, [activeTab]);
 
   const openTeamsChat = (userId: string, ticketId: string) => {
     const message = encodeURIComponent(`Hola! Te contacto por el Ticket numero ${ticketId}`);
@@ -357,6 +374,41 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                   <button onClick={() => onManageAgent('remove', email)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all p-2">
                     <Trash2 size={16}/>
                   </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-8">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2 mb-2">Solicitudes Pendientes</p>
+              {pendingRequests.length === 0 && <div className="text-sm text-gray-500">No hay solicitudes pendientes.</div>}
+              {pendingRequests.map(email => (
+                <div key={email} className="flex items-center justify-between p-4 bg-yellow-50 rounded-2xl border border-yellow-100 mb-2">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-amber-100 text-amber-700 rounded-lg flex items-center justify-center font-black text-xs">?</div>
+                    <span className="text-sm font-bold text-gray-700">{email}</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button onClick={async () => {
+                      try {
+                        await storageService.approveAgent(email);
+                        if (typeof onRefreshAgents === 'function') await onRefreshAgents();
+                        // refresh local pending list
+                        setPendingRequests(prev => prev.filter(p => p !== email));
+                      } catch (e) {
+                        console.error('Error approving agent', e);
+                        alert('Error aprobando la solicitud');
+                      }
+                    }} className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-black text-xs">Aprobar</button>
+                    <button onClick={async () => {
+                      try {
+                        await storageService.rejectAgent(email);
+                        setPendingRequests(prev => prev.filter(p => p !== email));
+                      } catch (e) {
+                        console.error('Error rejecting agent', e);
+                        alert('Error rechazando la solicitud');
+                      }
+                    }} className="bg-red-50 text-red-600 px-4 py-2 rounded-xl font-black text-xs">Rechazar</button>
+                  </div>
                 </div>
               ))}
             </div>

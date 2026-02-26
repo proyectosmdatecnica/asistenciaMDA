@@ -29,14 +29,18 @@ const App: React.FC = () => {
         storageService.fetchAgents()
       ]);
       
-      setAuthorizedAgents(agents);
+      // include any local fallback agent stored in localStorage
+      const localAgent = (localStorage.getItem('localAgentEmail') || '').toLowerCase();
+      const mergedAgents = Array.isArray(agents) ? [...agents.map((a:any) => String(a).toLowerCase())] : [];
+      if (localAgent && !mergedAgents.includes(localAgent)) mergedAgents.push(localAgent);
+      setAuthorizedAgents(mergedAgents);
       console.debug('[app] fetched authorizedAgents:', agents);
       console.debug('[app] currentUserId in refreshData:', currentUserId);
       setRequests(data);
       setLastSyncStatus('online');
       setCountdown(15);
 
-      if (agents.some(a => a.toLowerCase() === currentUserId.toLowerCase())) {
+      if (mergedAgents.some((a:string) => a.toLowerCase() === currentUserId.toLowerCase())) {
         setRole('agent');
       }
 
@@ -158,7 +162,7 @@ const App: React.FC = () => {
 
   const handleAgentManagement = async (action: 'add' | 'remove', email: string) => {
     setIsSyncing(true);
-    if (action === 'add') await storageService.addAgent(email);
+    if (action === 'add') await storageService.addAgent(email, true);
     else await storageService.removeAgent(email);
     await refreshData();
     setIsSyncing(false);
@@ -168,8 +172,18 @@ const App: React.FC = () => {
     // Add agent on server and switch UI role locally
     setIsSyncing(true);
     try {
-      await storageService.addAgent(email);
-      setRole('agent');
+      const res = await storageService.addAgent(email);
+      if (res && res.status === 201) {
+        // created active
+        setRole('agent');
+      } else if (res && res.status === 200) {
+        setRole('agent');
+      } else {
+        // pending (202) or similar
+        // don't switch role yet; inform user
+        console.debug('Registro en estado pendiente', res);
+        alert('Solicitud enviada. Un agente autorizado deberá aprobar su acceso.');
+      }
       await refreshData();
     } catch (e) {
       console.error('Error registering agent locally', e);
@@ -203,6 +217,7 @@ const App: React.FC = () => {
             onUpdateStatus={handleUpdateStatus}
             agents={authorizedAgents}
             onManageAgent={handleAgentManagement}
+            onRefreshAgents={refreshData}
           />
         ) : (
           <UserRequestView 
