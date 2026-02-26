@@ -218,6 +218,7 @@ const App: React.FC = () => {
             agents={authorizedAgents}
             onManageAgent={handleAgentManagement}
             onRefreshAgents={refreshData}
+            currentUserId={currentUserId}
           />
         ) : (
           <UserRequestView 

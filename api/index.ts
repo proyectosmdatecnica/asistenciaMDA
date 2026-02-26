@@ -142,6 +142,13 @@ export async function agentsHandler(req: HttpRequest, context: InvocationContext
                 ALTER TABLE authorized_agents ADD status VARCHAR(20) DEFAULT 'active';
             END
         `);
+        // add notifyReminders column if missing
+        await poolConnection.request().query(`
+            IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'notifyReminders' AND Object_ID = Object_ID(N'authorized_agents'))
+            BEGIN
+                ALTER TABLE authorized_agents ADD notifyReminders BIT DEFAULT 1;
+            END
+        `);
 
         if (method === "get") {
             const pending = req.query.get('pending');
@@ -260,3 +267,50 @@ export async function agentsRejectHandler(req: HttpRequest, context: InvocationC
 
 app.http('agentsApprove', { methods: ['POST'], authLevel: 'anonymous', route: 'agents/approve', handler: agentsApproveHandler });
 app.http('agentsReject', { methods: ['POST'], authLevel: 'anonymous', route: 'agents/reject', handler: agentsRejectHandler });
+
+// Agent settings: GET ?email=...  POST { email, notifyReminders }
+export async function agentsSettingsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    try {
+        const poolConnection = await getPool(context);
+        if (req.method.toLowerCase() === 'get') {
+            const email = req.query.get('email');
+            if (!email) return { status: 400, body: 'Email requerido' };
+            const result = await poolConnection.request().input('email', sql.VarChar, email.toLowerCase()).query("SELECT notifyReminders FROM authorized_agents WHERE email = @email");
+            if (result.recordset.length === 0) return { status: 200, jsonBody: { notifyReminders: true } };
+            const val = result.recordset[0].notifyReminders;
+            return { status: 200, jsonBody: { notifyReminders: !!val } };
+        }
+
+        if (req.method.toLowerCase() === 'post') {
+            let body: any;
+            try { body = await req.json(); } catch (e) { return { status: 400, body: 'JSON malformado' }; }
+            const email = body?.email?.toLowerCase();
+            if (!email) return { status: 400, body: 'Email requerido' };
+            const notify = body?.notifyReminders === true ? 1 : 0;
+            const now = Date.now();
+            // update if exists, else insert as pending with notify flag
+            await poolConnection.request()
+                .input('email', sql.VarChar, email)
+                .input('notify', sql.Bit, notify)
+                .input('now', sql.BigInt, now)
+                .query(`
+                    IF EXISTS (SELECT 1 FROM authorized_agents WHERE email = @email)
+                    BEGIN
+                        UPDATE authorized_agents SET notifyReminders = @notify WHERE email = @email
+                    END
+                    ELSE
+                    BEGIN
+                        INSERT INTO authorized_agents (email, addedAt, status, requestedAt, notifyReminders) VALUES (@email, @now, 'pending', @now, @notify)
+                    END
+                `);
+            return { status: 200, jsonBody: { success: true } };
+        }
+
+        return { status: 405, body: 'Not Allowed' };
+    } catch (err:any) {
+        context.error('agentsSettingsHandler error', err.message);
+        return { status: 500, jsonBody: { error: err.message } };
+    }
+}
+
+app.http('agentsSettings', { methods: ['GET','POST'], authLevel: 'anonymous', route: 'agents/settings', handler: agentsSettingsHandler });

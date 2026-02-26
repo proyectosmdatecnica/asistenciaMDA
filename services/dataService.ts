@@ -109,6 +109,28 @@ export const storageService = {
     return response.ok;
   },
 
+  async fetchAgentSettings(email: string): Promise<{ notifyReminders: boolean } | null> {
+    try {
+      const url = `${AGENTS_ENDPOINT}/settings?email=${encodeURIComponent(email)}`;
+      const resp = await fetch(url);
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      return { notifyReminders: !!data.notifyReminders };
+    } catch (e) {
+      return null;
+    }
+  },
+
+  async saveAgentSettings(email: string, notifyReminders: boolean): Promise<boolean> {
+    const url = `${AGENTS_ENDPOINT}/settings`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, notifyReminders })
+    });
+    return response.ok;
+  },
+
   async removeAgent(email: string): Promise<boolean> {
     const response = await fetch(`${AGENTS_ENDPOINT}?email=${encodeURIComponent(email)}`, {
       method: 'DELETE'
