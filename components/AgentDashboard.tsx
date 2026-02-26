@@ -484,7 +484,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                   <tr key={req.id} className="hover:bg-gray-50 transition-colors">
                     <td className="p-6 font-black text-gray-900">{req.id}</td>
                     <td className="p-6 font-black text-gray-900">{req.userName}</td>
-                    <td className="p-6 font-bold text-gray-600">{req.subject}</td>
+                    <td className="p-6 font-bold text-gray-600">
+                      <span title={(req.description && req.description.length > 0) ? `${req.subject} — ${req.description}` : req.subject} className="block truncate max-w-[28rem]">
+                        {req.subject}
+                      </span>
+                    </td>
                     <td className="p-6 font-black text-indigo-600">{req.agentName || '-'}</td>
                     <td className="p-6 text-gray-400">
                       {req.completedAt ? new Date(Number(req.completedAt)).toLocaleString('es-ES', { 
