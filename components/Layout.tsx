@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   MessageSquare, 
@@ -14,6 +14,41 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children, role, onOpenHelp, pendingCount = 0 }) => {
+  const [isDebugVisible, setIsDebugVisible] = useState(false);
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('debug') === '1') setIsDebugVisible(true);
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
+  const handleDebugClick = async () => {
+    try {
+      const teams = (window as any).microsoftTeams;
+      let ctx: any = null;
+      if (teams && teams.app && teams.app.getContext) {
+        try { ctx = await teams.app.getContext(); } catch(e) { ctx = { error: String(e) }; }
+      }
+      let agents: any = null;
+      try {
+        const r = await fetch('/api/agents');
+        agents = r.ok ? await r.json() : { status: r.status };
+      } catch(e) { agents = { error: String(e) } }
+
+      const out = {
+        microsoftTeamsPresent: !!(window as any).microsoftTeams,
+        context: ctx,
+        agents
+      };
+      // show compact output
+      alert(JSON.stringify(out, null, 2));
+    } catch (e: any) {
+      alert('Debug error: ' + (e?.message || e));
+    }
+  };
   return (
     <div className="flex h-screen w-full bg-[#f5f5f5] font-sans">
       {/* Barra lateral estilo Teams */}
@@ -65,6 +100,9 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onOpenHelp, pendingCoun
           </div>
           
           <div className="flex items-center space-x-4">
+            {isDebugVisible && (
+              <button onClick={handleDebugClick} className="mr-4 px-3 py-1 rounded-lg bg-gray-100 text-xs font-bold">DEBUG</button>
+            )}
             {role === 'agent' && pendingCount > 0 && (
               <div className="flex items-center bg-red-50 px-3 py-1 rounded-full text-red-600 space-x-2 animate-pulse">
                 <Bell size={12} className="fill-red-600" />
