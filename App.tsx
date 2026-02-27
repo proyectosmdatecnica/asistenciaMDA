@@ -120,18 +120,16 @@ const App: React.FC = () => {
 
     const completed = requests.filter(r => r.status === 'completed');
     
-    // Filtrar solo los completados que ocurrieron hoy
-    const completedTodayCount = completed.filter(r => 
-      r.completedAt && Number(r.completedAt) >= startOfToday
-    ).length;
+    // Filtrar solo los completados que ocurrieron hoy (reinicio diario)
+    const completedToday = completed.filter(r => r.completedAt && Number(r.completedAt) >= startOfToday);
+    const completedTodayCount = completedToday.length;
 
     const active = requests.filter(r => r.status === 'waiting' || r.status === 'in-progress' || r.status === 'paused');
     
     let avgMins = 5;
-    if (completed.length > 0) {
-      // Promedio basado en los últimos tickets para mayor realismo
-      const totalWait = completed.reduce((acc, curr) => acc + (Number(curr.startedAt || curr.completedAt || Date.now()) - Number(curr.createdAt)), 0);
-      avgMins = Math.max(2, Math.round((totalWait / completed.length) / 60000));
+    if (completedTodayCount > 0) {
+      const totalWait = completedToday.reduce((acc, curr) => acc + (Number(curr.startedAt || curr.completedAt || Date.now()) - Number(curr.createdAt)), 0);
+      avgMins = Math.max(2, Math.round((totalWait / completedTodayCount) / 60000));
     }
     
     return { 
