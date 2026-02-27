@@ -1,5 +1,5 @@
 
-export type RequestStatus = 'waiting' | 'in-progress' | 'completed' | 'cancelled';
+export type RequestStatus = 'waiting' | 'in-progress' | 'paused' | 'completed' | 'cancelled';
 
 export interface SupportRequest {
   id: string;
@@ -11,6 +11,8 @@ export interface SupportRequest {
   createdAt: number;
   startedAt?: number;
   completedAt?: number;
+  pausedAt?: number | null;
+  pausedAccum?: number | null; // accumulated paused milliseconds
   priority: 'low' | 'medium' | 'high' | 'urgent';
   category?: string;
   aiSummary?: string;

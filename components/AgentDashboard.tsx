@@ -137,14 +137,24 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
     // Only run live timer while in-progress (taken). For completed/cancelled show total duration between startedAt and completedAt.
     const started = Number(req.startedAt || 0);
     const completed = Number(req.completedAt || 0);
+    const pausedAt = Number((req as any).pausedAt || 0);
+    const pausedAccum = Number((req as any).pausedAccum || 0);
     if (req.status === 'in-progress') {
-      if (started) return getElapsedTime(started);
+      if (started) {
+        const effective = Math.max(0, now - started - (pausedAccum || 0));
+        const s = Math.floor(effective / 1000);
+        return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+      }
       return '-';
     }
     if (req.status === 'completed' || req.status === 'cancelled') {
-      if (started && completed) return formatDuration(started, completed);
+      if (started && completed) return formatDuration(started, completed - (pausedAccum || 0));
       // if completed but no started timestamp, fallback to '-' or show time between created and completed
       if (completed && req.createdAt) return formatDuration(Number(req.createdAt), completed);
+      return '-';
+    }
+    if (req.status === 'paused') {
+      if (started && pausedAt) return formatDuration(started, pausedAt - (pausedAccum || 0));
       return '-';
     }
     // waiting or other statuses
@@ -255,9 +265,22 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
 
                           {req.status === 'in-progress' && (
                             <div className="flex items-center space-x-2">
+                              <button title="Pausar" onClick={() => onUpdateStatus(req.id, 'paused')} className="bg-yellow-50 text-amber-600 p-2 rounded-xl hover:bg-amber-100 transition-all">Pausar</button>
                               <button title="Volver a la cola" onClick={() => onUpdateStatus(req.id, 'waiting')} className="bg-gray-100 text-gray-500 p-2 rounded-xl hover:bg-gray-200 transition-all"><RotateCcw size={16}/></button>
                               <button title="Cancelar Ticket" onClick={() => onUpdateStatus(req.id, 'cancelled')} className="bg-red-50 text-red-400 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all"><XCircle size={16}/></button>
                               <button title="Cerrar como Solucionado" onClick={() => onUpdateStatus(req.id, 'completed')} className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"><CheckCircle size={16}/></button>
+                              <button onClick={() => openTeamsChat(req.userId, req.id)} className="text-[10px] font-black text-indigo-600 hover:underline flex items-center space-x-1 ml-2">
+                                <MessageCircle size={14} />
+                                <span>Contactar</span>
+                              </button>
+                            </div>
+                          )}
+
+                          {req.status === 'paused' && (
+                            <div className="flex items-center space-x-2">
+                              <button title="Reanudar" onClick={() => onUpdateStatus(req.id, 'in-progress')} className="bg-indigo-600 text-white text-[9px] font-black px-3 py-2 rounded-xl">REANUDAR</button>
+                              <button title="Cancelar Ticket" onClick={() => onUpdateStatus(req.id, 'cancelled')} className="bg-red-50 text-red-600 px-2 py-2 rounded-xl">Cancelar</button>
+                              <button title="Cerrar como Solucionado" onClick={() => onUpdateStatus(req.id, 'completed')} className="bg-emerald-50 text-emerald-600 px-2 py-2 rounded-xl">Cerrar</button>
                               <button onClick={() => openTeamsChat(req.userId, req.id)} className="text-[10px] font-black text-indigo-600 hover:underline flex items-center space-x-1 ml-2">
                                 <MessageCircle size={14} />
                                 <span>Contactar</span>
@@ -293,6 +316,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                         </div>
                       </div>
                       <div className="flex space-x-2">
+                        <button title="Pausar" onClick={() => onUpdateStatus(req.id, 'paused')} className="bg-yellow-50 text-amber-600 p-2 rounded-xl hover:bg-amber-100 transition-all">Pausar</button>
                         <button 
                           title="Volver a la cola"
                           onClick={() => onUpdateStatus(req.id, 'waiting')} 
@@ -318,8 +342,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                     </div>
                     <p className="text-[11px] font-black text-gray-700 line-clamp-2 mb-1">{req.subject}</p>
                     <p className="text-[10px] text-gray-500 mb-3 italic line-clamp-1">{req.description}</p>
-                    <div className="flex items-center justify-between pt-3 border-t border-gray-50">
-                      <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-3 py-1 rounded-lg">Tiempo: {getElapsedTime(req.startedAt || req.createdAt)}</span>
+                      <div className="flex items-center justify-between pt-3 border-t border-gray-50">
+                      <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-3 py-1 rounded-lg">Tiempo: {renderElapsedFor(req)}</span>
                       <button onClick={() => openTeamsChat(req.userId, req.id)} className="text-[10px] font-black text-indigo-600 hover:bg-indigo-50 px-3 py-1 rounded-lg uppercase flex items-center space-x-1">
                         <MessageCircle size={12}/>
                         <span>Contactar</span>

@@ -27,6 +27,20 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
     try {
         const poolConnection = await getPool(context);
 
+        // Ensure requests table has pause-related columns
+        await poolConnection.request().query(`
+            IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'pausedAt' AND Object_ID = Object_ID(N'requests'))
+            BEGIN
+                ALTER TABLE requests ADD pausedAt BIGINT NULL;
+            END
+        `);
+        await poolConnection.request().query(`
+            IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'pausedAccum' AND Object_ID = Object_ID(N'requests'))
+            BEGIN
+                ALTER TABLE requests ADD pausedAccum BIGINT DEFAULT 0;
+            END
+        `);
+
         if (method === "get") {
             const result = await poolConnection.request().query("SELECT * FROM requests ORDER BY createdAt DESC");
             return { status: 200, jsonBody: result.recordset };
@@ -80,7 +94,7 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
 
         if (method === "patch") {
             const body: any = await req.json();
-            
+
             if (body.subject !== undefined || body.description !== undefined) {
                 await poolConnection.request()
                     .input('id', sql.VarChar, id)
@@ -93,19 +107,57 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                                 priority = ISNULL(@priority, priority) 
                             WHERE id = @id AND status = 'waiting'`);
             } else {
-                await poolConnection.request()
-                    .input('id', sql.VarChar, id)
-                    .input('status', sql.VarChar, body.status)
-                    .input('agentId', sql.VarChar, body.agentId || null)
-                    .input('agentName', sql.VarChar, body.agentName || null)
-                    .input('now', sql.BigInt, Date.now())
-                    .query(`UPDATE requests SET 
-                            status = @status, 
-                            agentId = CASE WHEN @status = 'in-progress' THEN @agentId WHEN @status = 'waiting' THEN NULL ELSE agentId END,
-                            agentName = CASE WHEN @status = 'in-progress' THEN @agentName WHEN @status = 'waiting' THEN NULL ELSE agentName END,
-                            startedAt = CASE WHEN @status = 'in-progress' AND startedAt IS NULL THEN @now WHEN @status = 'waiting' THEN NULL ELSE startedAt END, 
-                            completedAt = CASE WHEN @status IN ('completed', 'cancelled') THEN @now WHEN @status IN ('waiting', 'in-progress') THEN NULL ELSE completedAt END 
-                            WHERE id = @id`);
+                const now = Date.now();
+                const status = body.status;
+                // Handle pause/resume and normal transitions
+                if (status === 'paused') {
+                    await poolConnection.request()
+                        .input('id', sql.VarChar, id)
+                        .input('agentId', sql.VarChar, body.agentId || null)
+                        .input('agentName', sql.VarChar, body.agentName || null)
+                        .input('now', sql.BigInt, now)
+                        .query(`
+                            UPDATE requests SET
+                                status = 'paused',
+                                agentId = CASE WHEN status = 'waiting' THEN @agentId ELSE agentId END,
+                                agentName = CASE WHEN status = 'waiting' THEN @agentName ELSE agentName END,
+                                pausedAt = CASE WHEN pausedAt IS NULL THEN @now ELSE pausedAt END
+                            WHERE id = @id
+                        `);
+                } else if (status === 'in-progress') {
+                    // resume from paused or start new in-progress
+                    await poolConnection.request()
+                        .input('id', sql.VarChar, id)
+                        .input('agentId', sql.VarChar, body.agentId || null)
+                        .input('agentName', sql.VarChar, body.agentName || null)
+                        .input('now', sql.BigInt, now)
+                        .query(`
+                            UPDATE requests SET
+                                status = 'in-progress',
+                                agentId = @agentId,
+                                agentName = @agentName,
+                                startedAt = CASE WHEN startedAt IS NULL THEN @now ELSE startedAt END,
+                                pausedAccum = ISNULL(pausedAccum, 0) + CASE WHEN pausedAt IS NOT NULL THEN (@now - pausedAt) ELSE 0 END,
+                                pausedAt = NULL,
+                                completedAt = NULL
+                            WHERE id = @id
+                        `);
+                } else {
+                    // other transitions (waiting, completed, cancelled)
+                    await poolConnection.request()
+                        .input('id', sql.VarChar, id)
+                        .input('status', sql.VarChar, status)
+                        .input('agentId', sql.VarChar, body.agentId || null)
+                        .input('agentName', sql.VarChar, body.agentName || null)
+                        .input('now', sql.BigInt, now)
+                        .query(`UPDATE requests SET 
+                                status = @status, 
+                                agentId = CASE WHEN @status = 'in-progress' THEN @agentId WHEN @status = 'waiting' THEN NULL ELSE agentId END,
+                                agentName = CASE WHEN @status = 'in-progress' THEN @agentName WHEN @status = 'waiting' THEN NULL ELSE agentName END,
+                                startedAt = CASE WHEN @status = 'in-progress' AND startedAt IS NULL THEN @now WHEN @status = 'waiting' THEN NULL ELSE startedAt END, 
+                                completedAt = CASE WHEN @status IN ('completed', 'cancelled') THEN @now WHEN @status IN ('waiting', 'in-progress') THEN NULL ELSE completedAt END 
+                                WHERE id = @id`);
+                }
             }
             return { status: 200, jsonBody: { success: true } };
         }
