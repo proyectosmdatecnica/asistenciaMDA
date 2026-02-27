@@ -290,7 +290,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
 
                           {(req.status === 'completed' || req.status === 'cancelled') && (
                             <div className="flex items-center space-x-2">
-                              <button onClick={() => onUpdateStatus(req.id, 'in-progress')} className="bg-indigo-50 text-indigo-600 text-[9px] font-black px-3 py-2 rounded-xl">REABRIR</button>
+                              <button onClick={() => onUpdateStatus(req.id, 'waiting')} className="bg-indigo-50 text-indigo-600 text-[9px] font-black px-3 py-2 rounded-xl">REABRIR</button>
                             </div>
                           )}
                         </div>
@@ -505,6 +505,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                     <th className="p-6 font-black text-gray-400 uppercase text-[9px]">Agente</th>
                     <th className="p-6 font-black text-gray-400 uppercase text-[9px]">Cierre</th>
                     <th className="p-6 font-black text-gray-400 uppercase text-[9px]">Estado</th>
+                    <th className="p-6 font-black text-gray-400 uppercase text-[9px]">Acciones</th>
                   </tr>
                 </thead>
               <tbody className="divide-y divide-gray-50">
@@ -528,6 +529,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       <span className={`text-[8px] font-black px-2 py-1 rounded uppercase ${req.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
                         {statusLabel(req.status).toUpperCase()}
                       </span>
+                    </td>
+                    <td className="p-6">
+                      <button onClick={() => onUpdateStatus(req.id, 'waiting')} className="bg-indigo-50 text-indigo-600 text-[9px] font-black px-3 py-2 rounded-xl">REABRIR</button>
                     </td>
                   </tr>
                 ))}
