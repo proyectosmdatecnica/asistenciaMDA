@@ -71,6 +71,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
     return () => { mounted = false; };
   }, [activeTab]);
 
+  
+
   useEffect(() => {
     try {
       const load = async () => {
@@ -463,6 +465,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                 </div>
               ))}
             </div>
+
+            
           </div>
         </div>
       ) : (
