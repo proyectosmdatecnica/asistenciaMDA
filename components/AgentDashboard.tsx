@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { SupportRequest, QueueStats } from '../types';
 import { 
-  Clock, CheckCircle, Search, Zap, List, LayoutGrid, Settings, Plus, Trash2, Activity, MessageCircle, RotateCcw, XCircle
+  Clock, CheckCircle, Search, Zap, List, LayoutGrid, Settings, Plus, Trash2, Activity, MessageCircle, RotateCcw, XCircle, Pause, Play
 } from 'lucide-react';
 import usePendingNotifications from '../hooks/usePendingNotifications';
 import { storageService } from '../services/dataService';
@@ -265,7 +265,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
 
                           {req.status === 'in-progress' && (
                             <div className="flex items-center space-x-2">
-                              <button title="Pausar" onClick={() => onUpdateStatus(req.id, 'paused')} className="bg-yellow-50 text-amber-600 p-2 rounded-xl hover:bg-amber-100 transition-all">Pausar</button>
+                              <button title="Pausar" onClick={() => onUpdateStatus(req.id, 'paused')} className="bg-yellow-50 text-amber-600 p-2 rounded-xl hover:bg-amber-100 transition-all flex items-center justify-center"><Pause size={16} /></button>
                               <button title="Volver a la cola" onClick={() => onUpdateStatus(req.id, 'waiting')} className="bg-gray-100 text-gray-500 p-2 rounded-xl hover:bg-gray-200 transition-all"><RotateCcw size={16}/></button>
                               <button title="Cancelar Ticket" onClick={() => onUpdateStatus(req.id, 'cancelled')} className="bg-red-50 text-red-400 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all"><XCircle size={16}/></button>
                               <button title="Cerrar como Solucionado" onClick={() => onUpdateStatus(req.id, 'completed')} className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"><CheckCircle size={16}/></button>
@@ -278,9 +278,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
 
                           {req.status === 'paused' && (
                             <div className="flex items-center space-x-2">
-                              <button title="Reanudar" onClick={() => onUpdateStatus(req.id, 'in-progress')} className="bg-indigo-600 text-white text-[9px] font-black px-3 py-2 rounded-xl">REANUDAR</button>
-                              <button title="Cancelar Ticket" onClick={() => onUpdateStatus(req.id, 'cancelled')} className="bg-red-50 text-red-600 px-2 py-2 rounded-xl">Cancelar</button>
-                              <button title="Cerrar como Solucionado" onClick={() => onUpdateStatus(req.id, 'completed')} className="bg-emerald-50 text-emerald-600 px-2 py-2 rounded-xl">Cerrar</button>
+                              <button title="Reanudar" onClick={() => onUpdateStatus(req.id, 'in-progress')} className="bg-indigo-600 text-white p-2 rounded-xl hover:bg-indigo-700 transition-all flex items-center justify-center"><Play size={16} /></button>
+                              <button title="Cancelar Ticket" onClick={() => onUpdateStatus(req.id, 'cancelled')} className="bg-red-50 text-red-400 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all"><XCircle size={16} /></button>
+                              <button title="Cerrar como Solucionado" onClick={() => onUpdateStatus(req.id, 'completed')} className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"><CheckCircle size={16} /></button>
                               <button onClick={() => openTeamsChat(req.userId, req.id)} className="text-[10px] font-black text-indigo-600 hover:underline flex items-center space-x-1 ml-2">
                                 <MessageCircle size={14} />
                                 <span>Contactar</span>
@@ -290,7 +290,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
 
                           {(req.status === 'completed' || req.status === 'cancelled') && (
                             <div className="flex items-center space-x-2">
-                              <button onClick={() => onUpdateStatus(req.id, 'waiting')} className="bg-indigo-50 text-indigo-600 text-[9px] font-black px-3 py-2 rounded-xl">REABRIR</button>
+                              <button onClick={() => onUpdateStatus(req.id, 'waiting')} className="bg-indigo-50 text-indigo-600 text-[9px] font-black px-3 py-2 rounded-xl flex items-center space-x-2"><RotateCcw size={14}/><span>REABRIR</span></button>
                             </div>
                           )}
                         </div>
@@ -316,7 +316,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                         </div>
                       </div>
                       <div className="flex space-x-2">
-                        <button title="Pausar" onClick={() => onUpdateStatus(req.id, 'paused')} className="bg-yellow-50 text-amber-600 p-2 rounded-xl hover:bg-amber-100 transition-all">Pausar</button>
+                        <button title="Pausar" onClick={() => onUpdateStatus(req.id, 'paused')} className="bg-yellow-50 text-amber-600 p-2 rounded-xl hover:bg-amber-100 transition-all flex items-center justify-center"><Pause size={16} /></button>
                         <button 
                           title="Volver a la cola"
                           onClick={() => onUpdateStatus(req.id, 'waiting')} 
@@ -531,7 +531,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       </span>
                     </td>
                     <td className="p-6">
-                      <button onClick={() => onUpdateStatus(req.id, 'waiting')} className="bg-indigo-50 text-indigo-600 text-[9px] font-black px-3 py-2 rounded-xl">REABRIR</button>
+                      <button onClick={() => onUpdateStatus(req.id, 'waiting')} className="bg-indigo-50 text-indigo-600 text-[9px] font-black px-3 py-2 rounded-xl flex items-center space-x-2"><RotateCcw size={14}/><span>REABRIR</span></button>
                     </td>
                   </tr>
                 ))}
