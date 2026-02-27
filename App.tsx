@@ -125,7 +125,7 @@ const App: React.FC = () => {
       r.completedAt && Number(r.completedAt) >= startOfToday
     ).length;
 
-    const active = requests.filter(r => r.status === 'waiting' || r.status === 'in-progress');
+    const active = requests.filter(r => r.status === 'waiting' || r.status === 'in-progress' || r.status === 'paused');
     
     let avgMins = 5;
     if (completed.length > 0) {
@@ -155,7 +155,7 @@ const App: React.FC = () => {
 
   const handleUpdateStatus = useCallback(async (id: string, newStatus: SupportRequest['status']) => {
     setIsSyncing(true);
-    const agentData = newStatus === 'in-progress' ? { agentId: currentUserId, agentName: currentUserName } : {};
+    const agentData = (newStatus === 'in-progress' || newStatus === 'paused') ? { agentId: currentUserId, agentName: currentUserName } : {};
     if (await storageService.updateRequestStatus(id, newStatus, agentData)) refreshData(true);
     setIsSyncing(false);
   }, [currentUserId, currentUserName, refreshData]);

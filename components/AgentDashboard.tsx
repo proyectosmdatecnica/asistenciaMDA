@@ -238,7 +238,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {filteredRequests
-                    .filter(r => r.status === 'waiting' || r.status === 'in-progress')
+                    .filter(r => r.status === 'waiting' || r.status === 'in-progress' || r.status === 'paused')
                     .map(req => (
                     <tr key={req.id} className="hover:bg-gray-50 transition-colors">
                       <td className="p-3 font-black text-gray-800">{req.id}</td>
@@ -505,7 +505,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                     <th className="p-6 font-black text-gray-400 uppercase text-[9px]">Agente</th>
                     <th className="p-6 font-black text-gray-400 uppercase text-[9px]">Cierre</th>
                     <th className="p-6 font-black text-gray-400 uppercase text-[9px]">Estado</th>
-                    <th className="p-6 font-black text-gray-400 uppercase text-[9px]">Acciones</th>
+                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-36">Acciones</th>
                   </tr>
                 </thead>
               <tbody className="divide-y divide-gray-50">
@@ -530,7 +530,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                         {statusLabel(req.status).toUpperCase()}
                       </span>
                     </td>
-                    <td className="p-6">
+                    <td className="p-6 w-36">
                       <button onClick={() => onUpdateStatus(req.id, 'waiting')} className="bg-indigo-50 text-indigo-600 text-[9px] font-black px-3 py-2 rounded-xl flex items-center space-x-2"><RotateCcw size={14}/><span>REABRIR</span></button>
                     </td>
                   </tr>
