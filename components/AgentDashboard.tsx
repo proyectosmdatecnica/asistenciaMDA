@@ -24,6 +24,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
   const [newAgentEmail, setNewAgentEmail] = useState('');
   const [pendingRequests, setPendingRequests] = useState<string[]>([]);
   const [notifyEnabled, setNotifyEnabled] = useState<boolean>(true);
+  const [localAgentEmail, setLocalAgentEmail] = useState<string>('');
 
   // Poll for pending tickets and show desktop notifications (agents only)
   usePendingNotifications({ pollIntervalMs: 30000, apiUrl: '/api/requests', reminderIntervalMs: 5 * 60 * 1000, currentUserId });
@@ -99,6 +100,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
       setNotifyEnabled(true);
     }
   }, [currentUserId]);
+
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem('localAgentEmail') || '';
+      setLocalAgentEmail(v);
+    } catch (e) {
+      setLocalAgentEmail('');
+    }
+  }, []);
 
   const openTeamsChat = (userId: string, ticketId: string) => {
     const message = encodeURIComponent(`Hola! Te contacto por el Ticket numero ${ticketId}`);
@@ -437,6 +447,23 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                   }} />
                   <span className={`w-12 h-6 inline-block rounded-full transition-colors ${notifyEnabled ? 'bg-emerald-600' : 'bg-gray-300'}`}></span>
                 </label>
+              </div>
+            </div>
+
+            <div className="mb-6 bg-gray-50 p-4 rounded-2xl border border-gray-100">
+              <p className="text-sm font-black mb-2">Override local (QA)</p>
+              <p className="text-xs text-gray-500 mb-3">Si Teams no provee el correo correctamente en QA, puedes forzar tu email localmente para probar como agente.</p>
+              <div className="flex items-center space-x-2">
+                <input type="email" placeholder="correo@dominio.com" value={localAgentEmail} onChange={e => setLocalAgentEmail(e.target.value)} className="flex-1 bg-white border border-gray-200 px-4 py-2 rounded-xl outline-none" />
+                <button onClick={() => {
+                  try {
+                    if (localAgentEmail) localStorage.setItem('localAgentEmail', localAgentEmail.toLowerCase());
+                    else localStorage.removeItem('localAgentEmail');
+                    if (typeof onRefreshAgents === 'function') onRefreshAgents();
+                    alert('Valor guardado localmente. Refresca la app si es necesario.');
+                  } catch (e) { console.error(e); alert('No se pudo guardar en localStorage'); }
+                }} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-black">Guardar</button>
+                <button onClick={() => { try { localStorage.removeItem('localAgentEmail'); setLocalAgentEmail(''); if (typeof onRefreshAgents === 'function') onRefreshAgents(); } catch (e) {} }} className="bg-red-50 text-red-600 px-4 py-2 rounded-xl font-black">Quitar</button>
               </div>
             </div>
 
