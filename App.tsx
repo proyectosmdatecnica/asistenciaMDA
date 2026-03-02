@@ -29,12 +29,18 @@ const App: React.FC = () => {
         storageService.fetchAgents()
       ]);
       
-      setAuthorizedAgents(agents);
+      // include any local fallback agent stored in localStorage
+      const localAgent = (localStorage.getItem('localAgentEmail') || '').toLowerCase();
+      const mergedAgents = Array.isArray(agents) ? [...agents.map((a:any) => String(a).toLowerCase())] : [];
+      if (localAgent && !mergedAgents.includes(localAgent)) mergedAgents.push(localAgent);
+      setAuthorizedAgents(mergedAgents);
+      console.debug('[app] fetched authorizedAgents:', agents);
+      console.debug('[app] currentUserId in refreshData:', currentUserId);
       setRequests(data);
       setLastSyncStatus('online');
       setCountdown(15);
 
-      if (agents.some(a => a.toLowerCase() === currentUserId.toLowerCase())) {
+      if (mergedAgents.some((a:string) => a.toLowerCase() === currentUserId.toLowerCase())) {
         setRole('agent');
       }
 
@@ -58,13 +64,24 @@ const App: React.FC = () => {
     const init = async () => {
       try {
         const teams = (window as any).microsoftTeams;
+        console.debug('[app] microsoftTeams available?', !!teams);
         if (teams) {
-          await teams.app.initialize();
-          const context = await teams.app.getContext();
-          if (context.user?.userPrincipalName) {
-            const upn = context.user.userPrincipalName.toLowerCase();
-            setCurrentUserId(upn);
-            setCurrentUserName(context.user.displayName || upn);
+          try {
+            await teams.app.initialize();
+            const context = await teams.app.getContext();
+            console.debug('[app] teams context:', context);
+            // Try multiple fallbacks for identifying the user in different hosts (desktop/web)
+            const upn = context?.user?.userPrincipalName || context?.user?.id || context?.user?.userObjectId || context?.user?.userId;
+            if (upn) {
+              const normalized = String(upn).toLowerCase();
+              setCurrentUserId(normalized);
+              setCurrentUserName(context.user.displayName || normalized);
+              console.debug('[app] set currentUserId:', normalized);
+            } else {
+              console.debug('[app] no userPrincipalName in context');
+            }
+          } catch (e) {
+            console.debug('[app] teams init/getContext failed', e);
           }
         }
       } catch (e) {
@@ -103,18 +120,16 @@ const App: React.FC = () => {
 
     const completed = requests.filter(r => r.status === 'completed');
     
-    // Filtrar solo los completados que ocurrieron hoy
-    const completedTodayCount = completed.filter(r => 
-      r.completedAt && Number(r.completedAt) >= startOfToday
-    ).length;
+    // Filtrar solo los completados que ocurrieron hoy (reinicio diario)
+    const completedToday = completed.filter(r => r.completedAt && Number(r.completedAt) >= startOfToday);
+    const completedTodayCount = completedToday.length;
 
-    const active = requests.filter(r => r.status === 'waiting' || r.status === 'in-progress');
+    const active = requests.filter(r => r.status === 'waiting' || r.status === 'in-progress' || r.status === 'paused');
     
     let avgMins = 5;
-    if (completed.length > 0) {
-      // Promedio basado en los últimos tickets para mayor realismo
-      const totalWait = completed.reduce((acc, curr) => acc + (Number(curr.startedAt || curr.completedAt || Date.now()) - Number(curr.createdAt)), 0);
-      avgMins = Math.max(2, Math.round((totalWait / completed.length) / 60000));
+    if (completedTodayCount > 0) {
+      const totalWait = completedToday.reduce((acc, curr) => acc + (Number(curr.startedAt || curr.completedAt || Date.now()) - Number(curr.createdAt)), 0);
+      avgMins = Math.max(2, Math.round((totalWait / completedTodayCount) / 60000));
     }
     
     return { 
@@ -138,17 +153,41 @@ const App: React.FC = () => {
 
   const handleUpdateStatus = useCallback(async (id: string, newStatus: SupportRequest['status']) => {
     setIsSyncing(true);
-    const agentData = newStatus === 'in-progress' ? { agentId: currentUserId, agentName: currentUserName } : {};
+    const agentData = (newStatus === 'in-progress' || newStatus === 'paused') ? { agentId: currentUserId, agentName: currentUserName } : {};
     if (await storageService.updateRequestStatus(id, newStatus, agentData)) refreshData(true);
     setIsSyncing(false);
   }, [currentUserId, currentUserName, refreshData]);
 
   const handleAgentManagement = async (action: 'add' | 'remove', email: string) => {
     setIsSyncing(true);
-    if (action === 'add') await storageService.addAgent(email);
+    if (action === 'add') await storageService.addAgent(email, true);
     else await storageService.removeAgent(email);
     await refreshData();
     setIsSyncing(false);
+  };
+
+  const handleAgentRegistered = async (email: string) => {
+    // Add agent on server and switch UI role locally
+    setIsSyncing(true);
+    try {
+      const res = await storageService.addAgent(email);
+      if (res && res.status === 201) {
+        // created active
+        setRole('agent');
+      } else if (res && res.status === 200) {
+        setRole('agent');
+      } else {
+        // pending (202) or similar
+        // don't switch role yet; inform user
+        console.debug('Registro en estado pendiente', res);
+        alert('Solicitud enviada. Un agente autorizado deberá aprobar su acceso.');
+      }
+      await refreshData();
+    } catch (e) {
+      console.error('Error registering agent locally', e);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const activeRequestsForUser = useMemo(() => 
@@ -158,7 +197,7 @@ const App: React.FC = () => {
   if (!isTeamsReady) return <div className="h-screen w-full flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-[#5b5fc7]" size={40} /></div>;
 
   return (
-    <Layout role={role} onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')} onOpenHelp={() => setIsHelpOpen(true)}>
+    <Layout role={role} onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')} onOpenHelp={() => setIsHelpOpen(true)} onAgentRegister={handleAgentRegistered}>
       <div className="relative min-h-full pb-20">
         <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-3 bg-white px-5 py-3 rounded-full shadow-2xl border border-gray-100 text-[11px] font-black group transition-all">
           <div className="relative">
@@ -176,6 +215,8 @@ const App: React.FC = () => {
             onUpdateStatus={handleUpdateStatus}
             agents={authorizedAgents}
             onManageAgent={handleAgentManagement}
+            onRefreshAgents={refreshData}
+            currentUserId={currentUserId}
           />
         ) : (
           <UserRequestView 
