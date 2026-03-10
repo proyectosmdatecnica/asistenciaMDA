@@ -17,51 +17,6 @@ async function getPool(context: InvocationContext) {
         pool = null;
         throw err;
     }
-}
-
-// Handler Principal de Tickets
-export async function requestsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    const method = req.method.toLowerCase();
-    const id = req.params.id;
-
-    try {
-        const poolConnection = await getPool(context);
-
-        // Ensure requests table has pause-related columns
-        await poolConnection.request().query(`
-            IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'pausedAt' AND Object_ID = Object_ID(N'requests'))
-            BEGIN
-                ALTER TABLE requests ADD pausedAt BIGINT NULL;
-            END
-        `);
-        await poolConnection.request().query(`
-            IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'pausedAccum' AND Object_ID = Object_ID(N'requests'))
-            BEGIN
-                ALTER TABLE requests ADD pausedAccum BIGINT DEFAULT 0;
-            END
-        `);
-        // Ensure notifications_log table exists for storing Graph errors
-        await poolConnection.request().query(`
-            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='notifications_log' AND xtype='U')
-            BEGIN
-                CREATE TABLE notifications_log (
-                    id INT IDENTITY(1,1) PRIMARY KEY,
-                    createdAt BIGINT NOT NULL,
-                    targetEmail VARCHAR(255) NULL,
-                    statusCode INT NULL,
-                    responseText NVARCHAR(MAX) NULL,
-                    errorMessage NVARCHAR(MAX) NULL,
-                    payload NVARCHAR(MAX) NULL
-                );
-            END
-        `);
-
-        if (method === "get") {
-            const result = await poolConnection.request().query("SELECT * FROM requests ORDER BY createdAt DESC");
-            return { status: 200, jsonBody: result.recordset };
-        } 
-        
-        if (method === "post") {
             const r: any = await req.json();
             const countResult = await poolConnection.request().query("SELECT COUNT(*) as total FROM requests");
             const nextNum = (countResult.recordset[0].total + 1).toString().padStart(6, '0');
@@ -306,9 +261,15 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
 export async function agentsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
     const method = req.method.toLowerCase();
     try {
+// Handler Principal de Tickets
+export async function requestsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    const method = req.method.toLowerCase();
+    const id = req.params.id;
+
+    try {
         const poolConnection = await getPool(context);
 
-        // Crear tabla si no existe (inicializaci├│n robusta) y asegurar columnas para status/approval
+        // Crear tabla si no existe (inicialización robusta) y asegurar columnas para status/approval
         await poolConnection.request().query(`
             IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='authorized_agents' AND xtype='U')
             BEGIN
@@ -567,13 +528,12 @@ export async function sendActivityNotificationHandler(req: HttpRequest, context:
         const userAadId = body.userAadId;
         const userPrincipalName = body.userPrincipalName;
         const activityType = body.activityType || 'newRequest';
-        const previewText = body.previewText || { content: body.summary || 'Ten├®s una nueva solicitud' };
+        const previewText = body.previewText || { content: body.summary || 'Tenés una nueva solicitud' };
         const templateParameters = Array.isArray(body.templateParameters) ? body.templateParameters : (body.templateParameters ? Object.keys(body.templateParameters).map(k => ({ name: k, value: String(body.templateParameters[k]) })) : []);
 
         if (!userAadId && !userPrincipalName) return { status: 400, body: 'userAadId or userPrincipalName required' };
 
-        let token: string | undefined;
-        try { token = await getGraphAppToken(context); } catch (e) { token = undefined; }
+        const token = await getGraphAppToken(context);
         let targetUserId = userAadId;
 
         if (!targetUserId && userPrincipalName) {
@@ -600,7 +560,8 @@ export async function sendActivityNotificationHandler(req: HttpRequest, context:
             templateParameters
         };
 
-        if (token && teamsAppId) {
+        // Prefer Graph app-send if token available and teamsAppId present
+        if (teamsAppId) {
             try {
                 const gres = await fetch(`https://graph.microsoft.com/v1.0/users/${targetUserId}/teamwork/sendActivityNotification`, {
                     method: 'POST',
@@ -608,13 +569,18 @@ export async function sendActivityNotificationHandler(req: HttpRequest, context:
                     body: JSON.stringify(payload)
                 });
                 const gresText = await gres.text();
-                if (gres.ok) return { status: 200, jsonBody: { success: true } };
-                context.warn('Graph sendActivityNotification failed', gres.status, gresText);
+                if (!gres.ok) {
+                    context.error('Graph sendActivityNotification failed', gres.status, gresText);
+                    // fallthrough to webhook if configured
+                } else {
+                    return { status: 200, jsonBody: { success: true } };
+                }
             } catch (e:any) {
-                context.warn('Graph send failed', e && e.message || e);
+                context.warn('Graph send failed, will try webhook if configured', e && e.message || e);
             }
         }
 
+        // If we reach here and webhook is configured, send fallback message
         if (webhook) {
             const title = previewText && previewText.content ? previewText.content : 'Notificación de Asistencia MDA';
             const text = `Para: ${userPrincipalName || targetUserId}\n\n${title}\n\n${templateParameters && templateParameters.length ? JSON.stringify(templateParameters) : ''}`;
