@@ -10,7 +10,7 @@
   "id": "dd371e66-6e96-4487-bcb7-3f10755507b6",
   "packageName": "com.soporte.interno.cola",
   "developer": {
-    "name": "Tickets MDA Tecnica - QA",
+    "name": "Asistencia MDA Tecnica - QA",
     "websiteUrl": "https://www.microsoft.com",
     "privacyUrl": "https://www.microsoft.com/privacy",
     "termsOfUseUrl": "https://www.microsoft.com/terms"
@@ -20,8 +20,8 @@
     "outline": "outline.png"
   },
   "name": {
-    "short": "Tickets MDA Tecnica - QA",
-    "full": "Tickets MDA Tecnica - QA"
+    "short": "Asistencia MDA Tecnica - QA",
+    "full": "Asistencia MDA Tecnica - QA"
   },
   "description": {
     "short": "Gestión de cola para soporte técnico.",
@@ -32,8 +32,8 @@
     {
       "entityId": "supportTab",
       "name": "Cola de Tickets MDA Tecnica",
-      "contentUrl": "https://black-pond-084e07c0f-5.eastus2.1.azurestaticapps.net/",
-      "websiteUrl": "https://black-pond-084e07c0f-5.eastus2.1.azurestaticapps.net/",
+      "contentUrl": "https://black-pond-084e07c0f-8.eastus2.1.azurestaticapps.net/",
+      "websiteUrl": "https://black-pond-084e07c0f-8.eastus2.1.azurestaticapps.net/",
       "scopes": ["personal", "team", "groupChat"]
     }
   ],
@@ -43,7 +43,7 @@
     "messageTeamMembers"
   ],
   "validDomains": [
-    "black-pond-084e07c0f-5.eastus2.1.azurestaticapps.net",
+    "black-pond-084e07c0f-8.eastus2.1.azurestaticapps.net",
     "*.azurestaticapps.net"
   ]
 }
