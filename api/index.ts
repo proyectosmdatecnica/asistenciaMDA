@@ -40,6 +40,21 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                 ALTER TABLE requests ADD pausedAccum BIGINT DEFAULT 0;
             END
         `);
+        // Ensure notifications_log table exists for storing Graph errors
+        await poolConnection.request().query(`
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='notifications_log' AND xtype='U')
+            BEGIN
+                CREATE TABLE notifications_log (
+                    id INT IDENTITY(1,1) PRIMARY KEY,
+                    createdAt BIGINT NOT NULL,
+                    targetEmail VARCHAR(255) NULL,
+                    statusCode INT NULL,
+                    responseText NVARCHAR(MAX) NULL,
+                    errorMessage NVARCHAR(MAX) NULL,
+                    payload NVARCHAR(MAX) NULL
+                );
+            END
+        `);
 
         if (method === "get") {
             const result = await poolConnection.request().query("SELECT * FROM requests ORDER BY createdAt DESC");
@@ -109,7 +124,16 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                                         headers: { Authorization: `Bearer ${token}` }
                                     });
                                     if (!uresp.ok) {
-                                        context.warn('Could not resolve user for notification', email, await uresp.text());
+                                        const txt = await uresp.text();
+                                        context.warn('Could not resolve user for notification', email, txt);
+                                        await poolConnection.request()
+                                            .input('createdAt', sql.BigInt, Date.now())
+                                            .input('targetEmail', sql.VarChar, email)
+                                            .input('statusCode', sql.Int, uresp.status)
+                                            .input('responseText', sql.NVarChar, txt)
+                                            .input('errorMessage', sql.NVarChar, 'Could not resolve user')
+                                            .input('payload', sql.NVarChar, email)
+                                            .query(`INSERT INTO notifications_log (createdAt, targetEmail, statusCode, responseText, errorMessage, payload) VALUES (@createdAt,@targetEmail,@statusCode,@responseText,@errorMessage,@payload)`);
                                         continue;
                                     }
                                     const ujson = await uresp.json();
@@ -128,11 +152,29 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                                         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
                                         body: JSON.stringify(payload)
                                     });
+                                    const gresText = await gres.text();
                                     if (!gres.ok) {
-                                        context.warn('Failed to send notification to', email, await gres.text());
+                                        context.warn('Failed to send notification to', email, gres.status, gresText);
+                                        await poolConnection.request()
+                                            .input('createdAt', sql.BigInt, Date.now())
+                                            .input('targetEmail', sql.VarChar, email)
+                                            .input('statusCode', sql.Int, gres.status)
+                                            .input('responseText', sql.NVarChar, gresText)
+                                            .input('errorMessage', sql.NVarChar, 'Graph sendActivityNotification failed')
+                                            .input('payload', sql.NVarChar, JSON.stringify(payload))
+                                            .query(`INSERT INTO notifications_log (createdAt, targetEmail, statusCode, responseText, errorMessage, payload) VALUES (@createdAt,@targetEmail,@statusCode,@responseText,@errorMessage,@payload)`);
                                     }
                                 } catch (e:any) {
-                                    context.warn('Notify agent error', e && e.message || e);
+                                    const em = e && e.message || String(e);
+                                    context.warn('Notify agent error', em);
+                                    await poolConnection.request()
+                                        .input('createdAt', sql.BigInt, Date.now())
+                                        .input('targetEmail', sql.VarChar, email)
+                                        .input('statusCode', sql.Int, null)
+                                        .input('responseText', sql.NVarChar, null)
+                                        .input('errorMessage', sql.NVarChar, em)
+                                        .input('payload', sql.NVarChar, JSON.stringify({ email, newId, subject: r.subject }))
+                                        .query(`INSERT INTO notifications_log (createdAt, targetEmail, statusCode, responseText, errorMessage, payload) VALUES (@createdAt,@targetEmail,@statusCode,@responseText,@errorMessage,@payload)`);
                                 }
                             }
                         }
@@ -553,3 +595,18 @@ export async function sendActivityNotificationHandler(req: HttpRequest, context:
 }
 
 app.http('sendActivityNotification', { methods: ['POST'], authLevel: 'anonymous', route: 'notifications/send', handler: sendActivityNotificationHandler });
+
+// Expose notification logs for debugging in Testing
+export async function notificationsLogsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    try {
+        const poolConnection = await getPool(context);
+        const limit = parseInt(req.query.get('limit') || '50', 10);
+        const result = await poolConnection.request().query(`SELECT TOP (${limit}) id, createdAt, targetEmail, statusCode, responseText, errorMessage, payload FROM notifications_log ORDER BY createdAt DESC`);
+        return { status: 200, jsonBody: result.recordset };
+    } catch (err:any) {
+        context.error('notificationsLogsHandler error', err && err.message || err);
+        return { status: 500, jsonBody: { error: err && err.message || err } };
+    }
+}
+
+app.http('notificationsLogs', { methods: ['GET'], authLevel: 'anonymous', route: 'notifications/logs', handler: notificationsLogsHandler });
