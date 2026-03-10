@@ -274,7 +274,7 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                                     if (!email) continue;
                                     try {
                                         const uresp = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(email)}?$select=id`, { headers: { Authorization: `Bearer ${token}` } });
-                                        if (!uresp.ok) { context.warn('Could not resolve user for notification', email); continue; }
+                                        if (!uresp.ok) { const txt = await uresp.text(); context.warn('Could not resolve user for notification', email, txt); await poolConnection.request().input('createdAt', sql.BigInt, Date.now()).input('targetEmail', sql.VarChar, email).input('statusCode', sql.Int, uresp.status).input('responseText', sql.NVarChar, txt).input('errorMessage', sql.NVarChar, 'Could not resolve user').input('payload', sql.NVarChar, email).query(`INSERT INTO notifications_log (createdAt, targetEmail, statusCode, responseText, errorMessage, payload) VALUES (@createdAt,@targetEmail,@statusCode,@responseText,@errorMessage,@payload)`); continue; }
                                         const ujson = await uresp.json();
                                         const targetUserId = ujson.id;
                                         if (!targetUserId) continue;
@@ -285,8 +285,9 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                                             templateParameters: [{ name: 'requestId', value: reqRow.id }, { name: 'summary', value: reqRow.subject }]
                                         };
                                         const gres = await fetch(`https://graph.microsoft.com/v1.0/users/${targetUserId}/teamwork/sendActivityNotification`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                                        if (!gres.ok) context.warn('Failed to send notification to', email, await gres.text());
-                                    } catch (e:any) { context.warn('Notify agent error', e && e.message || e); }
+                                        const gresText = await gres.text();
+                                        if (!gres.ok) { context.warn('Failed to send notification to', email, gres.status, gresText); await poolConnection.request().input('createdAt', sql.BigInt, Date.now()).input('targetEmail', sql.VarChar, email).input('statusCode', sql.Int, gres.status).input('responseText', sql.NVarChar, gresText).input('errorMessage', sql.NVarChar, 'Graph sendActivityNotification failed').input('payload', sql.NVarChar, JSON.stringify(payload)).query(`INSERT INTO notifications_log (createdAt, targetEmail, statusCode, responseText, errorMessage, payload) VALUES (@createdAt,@targetEmail,@statusCode,@responseText,@errorMessage,@payload)`); }
+                                    } catch (e:any) { const em = e && e.message || String(e); context.warn('Notify agent error', em); await poolConnection.request().input('createdAt', sql.BigInt, Date.now()).input('targetEmail', sql.VarChar, email).input('statusCode', sql.Int, null).input('responseText', sql.NVarChar, null).input('errorMessage', sql.NVarChar, em).input('payload', sql.NVarChar, JSON.stringify({ id, subject: reqRow.subject })).query(`INSERT INTO notifications_log (createdAt, targetEmail, statusCode, responseText, errorMessage, payload) VALUES (@createdAt,@targetEmail,@statusCode,@responseText,@errorMessage,@payload)`); }
                                 }
                             } catch (e:any) { context.warn('Notifications dispatch failed', e && e.message || e); }
                         })();
@@ -500,6 +501,7 @@ export async function agentsSettingsHandler(req: HttpRequest, context: Invocatio
 }
 
 app.http('agentsSettings', { methods: ['GET','POST'], authLevel: 'anonymous', route: 'agents/settings', handler: agentsSettingsHandler });
+<<<<<<< HEAD
 
 // --- Notifications: send Activity Feed via Microsoft Graph (app-only)
 let _cachedGraphToken: { token?: string; expiresAt?: number } = {};
@@ -610,3 +612,5 @@ export async function notificationsLogsHandler(req: HttpRequest, context: Invoca
 }
 
 app.http('notificationsLogs', { methods: ['GET'], authLevel: 'anonymous', route: 'notifications/logs', handler: notificationsLogsHandler });
+=======
+>>>>>>> origin/main
