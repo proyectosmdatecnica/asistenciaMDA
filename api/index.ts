@@ -89,6 +89,59 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                 .query(`INSERT INTO requests (id, userId, userName, subject, description, status, createdAt, priority, aiSummary, category) 
                         VALUES (@id, @userId, @userName, @subject, @description, @status, @createdAt, @priority, @aiSummary, @category)`);
             
+            // Notify active agents (non-blocking; failures don't break request creation)
+            (async () => {
+                try {
+                    const agentsRes = await poolConnection.request().query("SELECT email FROM authorized_agents WHERE status = 'active' AND notifyReminders = 1 AND email IS NOT NULL");
+                    const agents = agentsRes.recordset || [];
+                    if (agents.length > 0) {
+                        const teamsAppId = process.env.TEAMS_APP_ID;
+                        if (!teamsAppId) {
+                            context.warn('TEAMS_APP_ID not configured; skipping notifications');
+                        } else {
+                            const token = await getGraphAppToken(context);
+                            for (const a of agents) {
+                                const email = a.email;
+                                if (!email) continue;
+                                try {
+                                    // resolve user id
+                                    const uresp = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(email)}?$select=id`, {
+                                        headers: { Authorization: `Bearer ${token}` }
+                                    });
+                                    if (!uresp.ok) {
+                                        context.warn('Could not resolve user for notification', email, await uresp.text());
+                                        continue;
+                                    }
+                                    const ujson = await uresp.json();
+                                    const targetUserId = ujson.id;
+                                    if (!targetUserId) continue;
+
+                                    const payload = {
+                                        topic: { source: 'entityUrl', value: `https://graph.microsoft.com/v1.0/teamsApps/${teamsAppId}` },
+                                        activityType: 'newRequest',
+                                        previewText: { content: `Nuevo ticket ${newId}: ${r.subject}` },
+                                        templateParameters: [ { name: 'requestId', value: newId }, { name: 'summary', value: r.subject } ]
+                                    };
+
+                                    const gres = await fetch(`https://graph.microsoft.com/v1.0/users/${targetUserId}/teamwork/sendActivityNotification`, {
+                                        method: 'POST',
+                                        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                                        body: JSON.stringify(payload)
+                                    });
+                                    if (!gres.ok) {
+                                        context.warn('Failed to send notification to', email, await gres.text());
+                                    }
+                                } catch (e:any) {
+                                    context.warn('Notify agent error', e && e.message || e);
+                                }
+                            }
+                        }
+                    }
+                } catch (e:any) {
+                    context.warn('Notifications dispatch failed', e && e.message || e);
+                }
+            })();
+
             return { status: 201, jsonBody: { success: true, id: newId } };
         }
 
@@ -157,6 +210,45 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                                 startedAt = CASE WHEN @status = 'in-progress' AND startedAt IS NULL THEN @now WHEN @status = 'waiting' THEN NULL ELSE startedAt END, 
                                 completedAt = CASE WHEN @status IN ('completed', 'cancelled') THEN @now WHEN @status IN ('waiting', 'in-progress') THEN NULL ELSE completedAt END 
                                 WHERE id = @id`);
+
+                    // If transitioning to waiting, notify active agents
+                    if (status === 'waiting') {
+                        (async () => {
+                            try {
+                                const rres = await poolConnection.request().input('id', sql.VarChar, id).query('SELECT id, subject FROM requests WHERE id = @id');
+                                if (!rres.recordset || rres.recordset.length === 0) return;
+                                const reqRow = rres.recordset[0];
+                                const agentsRes = await poolConnection.request().query("SELECT email FROM authorized_agents WHERE status = 'active' AND notifyReminders = 1 AND email IS NOT NULL");
+                                const agents = agentsRes.recordset || [];
+                                const teamsAppId = process.env.TEAMS_APP_ID;
+                                if (!teamsAppId) {
+                                    context.warn('TEAMS_APP_ID not configured; skipping notifications');
+                                    return;
+                                }
+                                if (agents.length === 0) return;
+                                const token = await getGraphAppToken(context);
+                                for (const a of agents) {
+                                    const email = a.email;
+                                    if (!email) continue;
+                                    try {
+                                        const uresp = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(email)}?$select=id`, { headers: { Authorization: `Bearer ${token}` } });
+                                        if (!uresp.ok) { context.warn('Could not resolve user for notification', email); continue; }
+                                        const ujson = await uresp.json();
+                                        const targetUserId = ujson.id;
+                                        if (!targetUserId) continue;
+                                        const payload = {
+                                            topic: { source: 'entityUrl', value: `https://graph.microsoft.com/v1.0/teamsApps/${teamsAppId}` },
+                                            activityType: 'newRequest',
+                                            previewText: { content: `Ticket en cola ${reqRow.id}: ${reqRow.subject}` },
+                                            templateParameters: [{ name: 'requestId', value: reqRow.id }, { name: 'summary', value: reqRow.subject }]
+                                        };
+                                        const gres = await fetch(`https://graph.microsoft.com/v1.0/users/${targetUserId}/teamwork/sendActivityNotification`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                                        if (!gres.ok) context.warn('Failed to send notification to', email, await gres.text());
+                                    } catch (e:any) { context.warn('Notify agent error', e && e.message || e); }
+                                }
+                            } catch (e:any) { context.warn('Notifications dispatch failed', e && e.message || e); }
+                        })();
+                    }
                 }
             }
             return { status: 200, jsonBody: { success: true } };
@@ -366,3 +458,98 @@ export async function agentsSettingsHandler(req: HttpRequest, context: Invocatio
 }
 
 app.http('agentsSettings', { methods: ['GET','POST'], authLevel: 'anonymous', route: 'agents/settings', handler: agentsSettingsHandler });
+
+// --- Notifications: send Activity Feed via Microsoft Graph (app-only)
+let _cachedGraphToken: { token?: string; expiresAt?: number } = {};
+async function getGraphAppToken(context: InvocationContext) {
+    try {
+        if (_cachedGraphToken.token && _cachedGraphToken.expiresAt && Date.now() < _cachedGraphToken.expiresAt - 60000) return _cachedGraphToken.token;
+        const tenant = process.env.GRAPH_TENANT_ID;
+        const clientId = process.env.GRAPH_CLIENT_ID;
+        const clientSecret = process.env.GRAPH_CLIENT_SECRET;
+        if (!tenant || !clientId || !clientSecret) throw new Error('Graph app credentials not configured');
+        const params = new URLSearchParams();
+        params.append('client_id', clientId);
+        params.append('scope', 'https://graph.microsoft.com/.default');
+        params.append('client_secret', clientSecret);
+        params.append('grant_type', 'client_credentials');
+
+        const resp = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
+            method: 'POST',
+            body: params,
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            context.error('Failed to get Graph token', data);
+            throw new Error('Failed to obtain Graph token');
+        }
+        _cachedGraphToken.token = data.access_token;
+        _cachedGraphToken.expiresAt = Date.now() + (data.expires_in || 3600) * 1000;
+        return _cachedGraphToken.token;
+    } catch (err:any) {
+        context.error('getGraphAppToken error', err.message || err);
+        throw err;
+    }
+}
+
+export async function sendActivityNotificationHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    if (req.method.toLowerCase() !== 'post') return { status: 405, body: 'Not Allowed' };
+    try {
+        const body: any = await req.json();
+        const userAadId = body.userAadId;
+        const userPrincipalName = body.userPrincipalName;
+        const activityType = body.activityType || 'newRequest';
+        const previewText = body.previewText || { content: body.summary || 'Tenés una nueva solicitud' };
+        const templateParameters = Array.isArray(body.templateParameters) ? body.templateParameters : (body.templateParameters ? Object.keys(body.templateParameters).map(k => ({ name: k, value: String(body.templateParameters[k]) })) : []);
+
+        if (!userAadId && !userPrincipalName) return { status: 400, body: 'userAadId or userPrincipalName required' };
+
+        const token = await getGraphAppToken(context);
+        let targetUserId = userAadId;
+
+        if (!targetUserId && userPrincipalName) {
+            // resolve user id by UPN
+            const uresp = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(userPrincipalName)}?$select=id`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (!uresp.ok) {
+                const txt = await uresp.text();
+                context.error('Failed to resolve user', txt);
+                return { status: 404, jsonBody: { error: 'User not found' } };
+            }
+            const ujson = await uresp.json();
+            targetUserId = ujson.id;
+        }
+
+        const teamsAppId = process.env.TEAMS_APP_ID || body.teamsAppId;
+        if (!teamsAppId) return { status: 400, body: 'TEAMS_APP_ID env or teamsAppId in body required' };
+
+        const payload = {
+            topic: {
+                source: 'entityUrl',
+                value: `https://graph.microsoft.com/v1.0/teamsApps/${teamsAppId}`
+            },
+            activityType,
+            previewText,
+            templateParameters
+        };
+
+        const gres = await fetch(`https://graph.microsoft.com/v1.0/users/${targetUserId}/teamwork/sendActivityNotification`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const gresText = await gres.text();
+        if (!gres.ok) {
+            context.error('Graph sendActivityNotification failed', gres.status, gresText);
+            return { status: 500, jsonBody: { error: 'Graph API error', details: gresText } };
+        }
+        return { status: 200, jsonBody: { success: true } };
+    } catch (err:any) {
+        context.error('sendActivityNotificationHandler error', err.message || err);
+        return { status: 500, jsonBody: { error: err.message || err } };
+    }
+}
+
+app.http('sendActivityNotification', { methods: ['POST'], authLevel: 'anonymous', route: 'notifications/send', handler: sendActivityNotificationHandler });

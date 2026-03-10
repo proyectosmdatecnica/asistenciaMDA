@@ -3,6 +3,10 @@
   "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
   "manifestVersion": "1.16",
   "version": "1.0.2",
+  "webApplicationInfo": {
+    "id": "677cde6e-86b1-4849-9ebc-c9b750ddbc73",
+    "resource": "api://677cde6e-86b1-4849-9ebc-c9b750ddbc73"
+  },
   "id": "dd371e66-6e96-4487-bcb7-3f10755507b6",
   "packageName": "com.soporte.interno.cola",
   "developer": {
