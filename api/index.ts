@@ -19,6 +19,33 @@ async function getPool(context: InvocationContext) {
     }
 }
 
+async function resolveInstalledAppTopic(token: string, targetUserId: string, teamsAppId: string, context: InvocationContext) {
+    try {
+        const resp = await fetch(`https://graph.microsoft.com/v1.0/users/${targetUserId}/teamwork/installedApps?$expand=teamsApp`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!resp.ok) {
+            context.warn('Could not list installedApps for user', targetUserId, resp.status);
+            return `https://graph.microsoft.com/v1.0/teamsApps/${teamsAppId}`;
+        }
+        const j = await resp.json();
+        const items = j.value || [];
+        for (const it of items) {
+            const ta = it.teamsApp || {};
+            // Match either by teamsApp.id (catalog id) or teamsApp.externalId (manifest id)
+            if (ta.id === teamsAppId || ta.externalId === teamsAppId) {
+                return `https://graph.microsoft.com/v1.0/users/${targetUserId}/teamwork/installedApps/${it.id}`;
+            }
+        }
+        // not found -> fallback to teamsApps path (previous behavior)
+        context.log('Installed app not found for user; falling back to teamsApps topic', targetUserId, teamsAppId);
+        return `https://graph.microsoft.com/v1.0/teamsApps/${teamsAppId}`;
+    } catch (e:any) {
+        context.warn('Error resolving installedApp topic', e && e.message || e);
+        return `https://graph.microsoft.com/v1.0/teamsApps/${teamsAppId}`;
+    }
+}
+
 // Handler Principal de Tickets
 export async function requestsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
     const method = req.method.toLowerCase();
@@ -107,6 +134,18 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
             // Notify active agents (non-blocking; failures don't break request creation)
             (async () => {
                 try {
+                    // Also notify the team channel via Incoming Webhook (non-blocking)
+                    (async () => {
+                        try {
+                            const webhookUrl = process.env.TEAMS_INCOMING_WEBHOOK;
+                            if (webhookUrl) {
+                                const title = `Nuevo ticket ${newId} - ${r.subject}`;
+                                const text = `Usuario: ${r.userName || r.userId || ''}\nID: ${newId}\nPrioridad: ${r.priority || 'media'}\n\n${r.description || ''}`;
+                                const ok = await sendTeamsIncomingWebhook(webhookUrl, title, text, context);
+                                if (!ok) context.warn('Incoming webhook notify failed', newId);
+                            }
+                        } catch (e:any) { context.warn('Incoming webhook error', e && e.message || e); }
+                    })();
                     const agentsRes = await poolConnection.request().query("SELECT email FROM authorized_agents WHERE status = 'active' AND notifyReminders = 1 AND email IS NOT NULL");
                     const agents = agentsRes.recordset || [];
                     if (agents.length > 0) {
@@ -140,8 +179,9 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                                     const targetUserId = ujson.id;
                                     if (!targetUserId) continue;
 
+                                    const topicValue = await resolveInstalledAppTopic(token, targetUserId, teamsAppId, context);
                                     const payload = {
-                                        topic: { source: 'entityUrl', value: `https://graph.microsoft.com/v1.0/teamsApps/${teamsAppId}` },
+                                        topic: { source: 'entityUrl', value: topicValue },
                                         activityType: 'newRequest',
                                         previewText: { content: `Nuevo ticket ${newId}: ${r.subject}` },
                                         templateParameters: [ { name: 'requestId', value: newId }, { name: 'summary', value: r.subject } ]
@@ -260,6 +300,18 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                                 const rres = await poolConnection.request().input('id', sql.VarChar, id).query('SELECT id, subject FROM requests WHERE id = @id');
                                 if (!rres.recordset || rres.recordset.length === 0) return;
                                 const reqRow = rres.recordset[0];
+                                        // Notify team channel via Incoming Webhook when a request moves to waiting
+                                        (async () => {
+                                            try {
+                                                const webhookUrl = process.env.TEAMS_INCOMING_WEBHOOK;
+                                                if (webhookUrl) {
+                                                    const title = `Ticket en cola ${reqRow.id} - ${reqRow.subject}`;
+                                                    const text = `ID: ${reqRow.id}\nResumen: ${reqRow.subject}\n\nRevisar en la app.`;
+                                                    const ok = await sendTeamsIncomingWebhook(webhookUrl, title, text, context);
+                                                    if (!ok) context.warn('Incoming webhook notify failed for waiting transition', reqRow.id);
+                                                }
+                                            } catch (e:any) { context.warn('Incoming webhook error (waiting)', e && e.message || e); }
+                                        })();
                                 const agentsRes = await poolConnection.request().query("SELECT email FROM authorized_agents WHERE status = 'active' AND notifyReminders = 1 AND email IS NOT NULL");
                                 const agents = agentsRes.recordset || [];
                                 const teamsAppId = process.env.TEAMS_APP_ID;
@@ -278,8 +330,9 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                                         const ujson = await uresp.json();
                                         const targetUserId = ujson.id;
                                         if (!targetUserId) continue;
+                                        const topicValue = await resolveInstalledAppTopic(token, targetUserId, teamsAppId, context);
                                         const payload = {
-                                            topic: { source: 'entityUrl', value: `https://graph.microsoft.com/v1.0/teamsApps/${teamsAppId}` },
+                                            topic: { source: 'entityUrl', value: topicValue },
                                             activityType: 'newRequest',
                                             previewText: { content: `Ticket en cola ${reqRow.id}: ${reqRow.subject}` },
                                             templateParameters: [{ name: 'requestId', value: reqRow.id }, { name: 'summary', value: reqRow.subject }]
@@ -593,8 +646,9 @@ export async function sendActivityNotificationHandler(req: HttpRequest, context:
         const teamsAppId = process.env.TEAMS_APP_ID || body.teamsAppId;
         const webhook = process.env.TEAMS_INCOMING_WEBHOOK || body.incomingWebhook;
 
+        const topicUrl = body.topicUrl || (teamsAppId ? `https://graph.microsoft.com/v1.0/teamsApps/${teamsAppId}` : undefined);
         const payload = {
-            topic: teamsAppId ? { source: 'entityUrl', value: `https://graph.microsoft.com/v1.0/teamsApps/${teamsAppId}` } : undefined,
+            topic: topicUrl ? { source: 'entityUrl', value: topicUrl } : undefined,
             activityType,
             previewText,
             templateParameters
