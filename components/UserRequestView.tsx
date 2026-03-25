@@ -127,8 +127,10 @@ const UserRequestView: React.FC<UserRequestViewProps> = ({ activeRequests, queue
           ) : (
             <div className="space-y-4">
               {activeRequests.map(req => {
+                // Normalize backend status values to UI-friendly labels
+                const normalizedStatus = req.status === 'in-progress' ? 'assigned' : req.status === 'completed' ? 'resolved' : req.status;
                 const pos = queuePosition(req.id);
-                const isWaiting = req.status === 'waiting';
+                const isWaiting = normalizedStatus === 'waiting';
                 const agentInfo = req.agentId ? ` (${req.agentId})` : '';
                 
                 const priorityStyles = {
@@ -145,10 +147,26 @@ const UserRequestView: React.FC<UserRequestViewProps> = ({ activeRequests, queue
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${req.priority === 'urgent' ? 'bg-red-50 text-red-600' : 'bg-indigo-50 text-indigo-600'}`}>
                           {isWaiting ? <Timer size={20}/> : <User size={20}/>}
                         </div>
-                        <div>
-                          <h4 className="text-sm font-black text-gray-900">{req.subject}</h4>
-                          <p className="text-[10px] text-gray-400 font-bold uppercase">ID: {req.id}</p>
-                        </div>
+                                <div>
+                                  <div className="flex items-center space-x-2">
+                                    <h4 className="text-sm font-black text-gray-900">{req.subject}</h4>
+                                    {/* Status badge */}
+                                    <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
+                                      req.status === 'waiting' ? 'bg-yellow-50 text-yellow-700' :
+                                      req.status === 'paused' ? 'bg-gray-50 text-gray-700' :
+                                      req.status === 'assigned' ? 'bg-emerald-50 text-emerald-700' :
+                                      req.status === 'resolved' ? 'bg-blue-50 text-blue-700' :
+                                      req.status === 'cancelled' ? 'bg-red-50 text-red-700' : 'bg-indigo-50 text-indigo-700'
+                                    }`}>{
+                                        normalizedStatus === 'waiting' ? 'Pendiente' :
+                                        normalizedStatus === 'paused' ? 'Pausado' :
+                                        normalizedStatus === 'assigned' ? 'Asignado' :
+                                        normalizedStatus === 'resolved' ? 'Resuelto' :
+                                        normalizedStatus === 'cancelled' ? 'Cancelado' : 'Pendiente'
+                                    }</span>
+                                  </div>
+                                  <p className="text-[10px] text-gray-400 font-bold uppercase">ID: {req.id}</p>
+                                </div>
                       </div>
                       <div className="flex items-center space-x-3">
                         {isWaiting && <button onClick={() => handleStartEdit(req)} className="text-indigo-500 hover:text-indigo-700 transition-colors"><Edit3 size={16}/></button>}
@@ -162,10 +180,13 @@ const UserRequestView: React.FC<UserRequestViewProps> = ({ activeRequests, queue
                       <div className="bg-gray-50 p-3 rounded-xl">
                         <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Estado</p>
                         <p className="text-xs font-black">
-                          {isWaiting 
-                            ? `En cola (#${pos})` 
-                            : `Agente Asignado: ${req.agentName || 'Técnico IT'}${agentInfo}`
-                          }
+                          {normalizedStatus === 'waiting' && `En cola (#${pos})`}
+                          {normalizedStatus === 'paused' && 'Pausado — esperando reanudación'}
+                          {normalizedStatus === 'assigned' && `Asignado a: ${req.agentName || 'Técnico IT'}${agentInfo}`}
+                          {normalizedStatus === 'resolved' && 'Resuelto'}
+                          {normalizedStatus === 'cancelled' && 'Cancelado'}
+                          {/* Fallback when status is unknown */}
+                          {!req.status && (req.agentName ? `Agente Asignado: ${req.agentName}${agentInfo}` : 'Pendiente')}
                         </p>
                       </div>
                       <div className="bg-gray-50 p-3 rounded-xl">
