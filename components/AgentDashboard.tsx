@@ -254,9 +254,12 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       <td className="p-3 font-black text-gray-800">{req.id}</td>
                       <td className="p-3 text-sm font-bold text-gray-700">{req.userName}</td>
                       <td className="p-3 text-sm text-gray-600">
-                        <span title={(req.description && req.description.length > 0) ? `${req.subject} — ${req.description}` : req.subject} className="block truncate max-w-[28rem]">
-                          {req.subject}
-                        </span>
+                        <div className="relative group max-w-[28rem]">
+                          <span className="block truncate">{req.subject}</span>
+                          <div className="hidden group-hover:block absolute left-0 top-full mt-2 z-50 w-[min(60vw,40rem)] max-h-[35vh] overflow-auto bg-white p-3 rounded-lg shadow-lg border border-gray-100 text-sm text-gray-700 whitespace-pre-wrap">
+                            {(req.description && req.description.length > 0) ? `${req.subject} — ${req.description}` : req.subject}
+                          </div>
+                        </div>
                       </td>
                       <td className="p-3 text-sm">
                         <span className={`text-[9px] font-black px-2 py-1 rounded ${req.priority === 'urgent' ? 'bg-red-600 text-white' : req.priority === 'high' ? 'bg-amber-100 text-amber-700' : req.priority === 'medium' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>{priorityLabel(req.priority)}</span>
@@ -541,9 +544,12 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                     <td className="p-6 font-black text-gray-900">{req.id}</td>
                     <td className="p-6 font-black text-gray-900">{req.userName}</td>
                     <td className="p-6 font-bold text-gray-600">
-                      <span title={(req.description && req.description.length > 0) ? `${req.subject} — ${req.description}` : req.subject} className="block truncate max-w-[28rem]">
-                        {req.subject}
-                      </span>
+                      <div className="relative group max-w-[28rem]">
+                        <span className="block truncate">{req.subject}</span>
+                        <div className="hidden group-hover:block absolute left-0 top-full mt-2 z-50 w-[min(60vw,40rem)] max-h-[35vh] overflow-auto bg-white p-3 rounded-lg shadow-lg border border-gray-100 text-sm text-gray-700 whitespace-pre-wrap">
+                          {(req.description && req.description.length > 0) ? `${req.subject} — ${req.description}` : req.subject}
+                        </div>
+                      </div>
                     </td>
                     <td className="p-6 font-black text-indigo-600">{req.agentName || '-'}</td>
                     <td className="p-6 text-gray-400">
