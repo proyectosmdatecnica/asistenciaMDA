@@ -191,7 +191,7 @@ const App: React.FC = () => {
   };
 
   const activeRequestsForUser = useMemo(() => 
-    requests.filter(r => r.userId === currentUserId && (r.status === 'waiting' || r.status === 'in-progress'))
+    requests.filter(r => r.userId === currentUserId && (r.status === 'waiting' || r.status === 'in-progress' || r.status === 'paused'))
   , [requests, currentUserId]);
 
   if (!isTeamsReady) return <div className="h-screen w-full flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-[#5b5fc7]" size={40} /></div>;
