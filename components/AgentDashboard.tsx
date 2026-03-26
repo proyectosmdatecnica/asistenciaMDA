@@ -25,6 +25,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
   const [pendingRequests, setPendingRequests] = useState<string[]>([]);
   const [notifyEnabled, setNotifyEnabled] = useState<boolean>(true);
   const [localAgentEmail, setLocalAgentEmail] = useState<string>('');
+  const [selectedRequest, setSelectedRequest] = useState<SupportRequest | null>(null);
 
   // Poll for pending tickets and show desktop notifications (agents only)
   usePendingNotifications({ pollIntervalMs: 30000, apiUrl: '/api/requests', reminderIntervalMs: 5 * 60 * 1000, currentUserId });
@@ -254,12 +255,12 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       <td className="p-3 font-black text-gray-800">{req.id}</td>
                       <td className="p-3 text-sm font-bold text-gray-700">{req.userName}</td>
                       <td className="p-3 text-sm text-gray-600">
-                        <div className="relative group max-w-[28rem]">
-                          <span className="block truncate">{req.subject}</span>
-                          <div className="hidden group-hover:block absolute left-0 top-full mt-2 z-50 w-[min(60vw,40rem)] max-h-[35vh] overflow-auto bg-white p-3 rounded-lg shadow-lg border border-gray-100 text-sm text-gray-700 whitespace-pre-wrap">
-                            {(req.description && req.description.length > 0) ? `${req.subject} — ${req.description}` : req.subject}
+                          <div className="relative group max-w-[28rem]">
+                            <span onClick={() => setSelectedRequest(req)} role="button" tabIndex={0} className="block truncate cursor-pointer hover:underline">{req.subject}</span>
+                            <div className="hidden group-hover:block absolute left-0 top-full mt-2 z-50 w-[min(60vw,40rem)] max-h-[35vh] overflow-auto bg-white p-3 rounded-lg shadow-lg border border-gray-100 text-sm text-gray-700 whitespace-pre-wrap">
+                              {(req.description && req.description.length > 0) ? `${req.subject} — ${req.description}` : req.subject}
+                            </div>
                           </div>
-                        </div>
                       </td>
                       <td className="p-3 text-sm">
                         <span className={`text-[9px] font-black px-2 py-1 rounded ${req.priority === 'urgent' ? 'bg-red-600 text-white' : req.priority === 'high' ? 'bg-amber-100 text-amber-700' : req.priority === 'medium' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>{priorityLabel(req.priority)}</span>
@@ -546,7 +547,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                     <td className="p-6 font-black text-gray-900">{req.userName}</td>
                     <td className="p-6 font-bold text-gray-600">
                       <div className="relative group max-w-[28rem]">
-                        <span className="block truncate">{req.subject}</span>
+                        <span onClick={() => setSelectedRequest(req)} role="button" tabIndex={0} className="block truncate cursor-pointer hover:underline">{req.subject}</span>
                         <div className="hidden group-hover:block absolute left-0 top-full mt-2 z-50 w-[min(60vw,40rem)] max-h-[35vh] overflow-auto bg-white p-3 rounded-lg shadow-lg border border-gray-100 text-sm text-gray-700 whitespace-pre-wrap">
                           {(req.description && req.description.length > 0) ? `${req.subject} — ${req.description}` : req.subject}
                         </div>
@@ -578,6 +579,29 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
         </div>
       )}
     </div>
+    {/* Detail modal */}
+    {selectedRequest && (
+      <div className="fixed inset-0 z-60 flex items-center justify-center">
+        <div onClick={() => setSelectedRequest(null)} className="absolute inset-0 bg-black/40" />
+        <div className="relative z-70 w-[min(95vw,900px)] max-h-[85vh] overflow-auto bg-white rounded-2xl shadow-2xl border border-gray-100 p-6">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h3 className="text-lg font-black text-gray-900">{selectedRequest.subject}</h3>
+              <p className="text-xs text-gray-500 mt-1">ID: {selectedRequest.id} — {selectedRequest.userName}</p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className={`text-[10px] font-black px-2 py-1 rounded ${selectedRequest.status === 'waiting' ? 'bg-amber-50 text-amber-600' : selectedRequest.status === 'in-progress' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>{statusLabel(selectedRequest.status)}</span>
+              <button onClick={() => setSelectedRequest(null)} className="text-gray-400 hover:text-gray-700">Cerrar</button>
+            </div>
+          </div>
+          <div className="prose max-w-none text-sm text-gray-700 whitespace-pre-wrap mb-4">{selectedRequest.description || 'Sin descripción adicional.'}</div>
+          <div className="flex justify-between items-center text-sm text-gray-500">
+            <div>Creado: {selectedRequest.createdAt ? new Date(Number(selectedRequest.createdAt)).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</div>
+            <div>Agente: {selectedRequest.agentName || '-'}</div>
+          </div>
+        </div>
+      </div>
+    )}
   );
 };
 
