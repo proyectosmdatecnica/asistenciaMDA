@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { SupportRequest, QueueStats } from '../types';
 import { 
   Clock, CheckCircle, Search, Zap, List, LayoutGrid, Settings, Plus, Trash2, Activity, MessageCircle, RotateCcw, XCircle, Pause, Play
@@ -26,6 +26,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
   const [notifyEnabled, setNotifyEnabled] = useState<boolean>(true);
   const [localAgentEmail, setLocalAgentEmail] = useState<string>('');
   const [selectedRequest, setSelectedRequest] = useState<SupportRequest | null>(null);
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({
+    id: 112, // px
+    user: 224,
+    subject: 480,
+    agent: 224,
+    created: 176,
+    closed: 176,
+    status: 112,
+    actions: 144,
+  });
+  const dragState = useRef<{ column?: string; startX?: number; startWidth?: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Poll for pending tickets and show desktop notifications (agents only)
   usePendingNotifications({ pollIntervalMs: 30000, apiUrl: '/api/requests', reminderIntervalMs: 5 * 60 * 1000, currentUserId });
@@ -217,6 +229,36 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
       </div>
     );
   };
+
+  // Column resize handlers
+  const startColumnResize = (e: React.MouseEvent, column: string) => {
+    e.preventDefault();
+    dragState.current = { column, startX: e.clientX, startWidth: columnWidths[column] };
+    setIsDragging(true);
+  };
+
+  useEffect(() => {
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!dragState.current || !dragState.current.column) return;
+      const { column, startX = 0, startWidth = 100 } = dragState.current;
+      const delta = ev.clientX - startX;
+      const next = Math.max(56, Math.round(startWidth + delta));
+      setColumnWidths(prev => ({ ...prev, [column]: next }));
+    };
+    const onMouseUp = () => {
+      if (!dragState.current) return;
+      dragState.current = null;
+      setIsDragging(false);
+    };
+    if (isDragging) {
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [isDragging, columnWidths]);
 
   return (<> 
     <div className="max-w-7xl mx-auto space-y-6 pb-12 animate-in fade-in">
@@ -556,14 +598,30 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
            <table className="w-full text-left text-xs border-collapse table-fixed">
                 <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
-                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-28">ID</th>
-                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-56">Usuario</th>
-                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-1/2">Asunto</th>
-                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-56">Agente</th>
-                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-44">Creado</th>
-                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-44">Cierre</th>
-                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-28">Estado</th>
-                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-36">Acciones</th>
+                    <th style={{width: `${columnWidths.id}px`}} className="p-6 font-black text-gray-400 uppercase text-[9px] relative">ID
+                      <div onMouseDown={(e) => startColumnResize(e, 'id')} className="absolute right-0 top-0 h-full w-2 cursor-col-resize" />
+                    </th>
+                    <th style={{width: `${columnWidths.user}px`}} className="p-6 font-black text-gray-400 uppercase text-[9px] relative">Usuario
+                      <div onMouseDown={(e) => startColumnResize(e, 'user')} className="absolute right-0 top-0 h-full w-2 cursor-col-resize" />
+                    </th>
+                    <th style={{width: `${columnWidths.subject}px`}} className="p-6 font-black text-gray-400 uppercase text-[9px] relative">Asunto
+                      <div onMouseDown={(e) => startColumnResize(e, 'subject')} className="absolute right-0 top-0 h-full w-2 cursor-col-resize" />
+                    </th>
+                    <th style={{width: `${columnWidths.agent}px`}} className="p-6 font-black text-gray-400 uppercase text-[9px] relative">Agente
+                      <div onMouseDown={(e) => startColumnResize(e, 'agent')} className="absolute right-0 top-0 h-full w-2 cursor-col-resize" />
+                    </th>
+                    <th style={{width: `${columnWidths.created}px`}} className="p-6 font-black text-gray-400 uppercase text-[9px] relative">Creado
+                      <div onMouseDown={(e) => startColumnResize(e, 'created')} className="absolute right-0 top-0 h-full w-2 cursor-col-resize" />
+                    </th>
+                    <th style={{width: `${columnWidths.closed}px`}} className="p-6 font-black text-gray-400 uppercase text-[9px] relative">Cierre
+                      <div onMouseDown={(e) => startColumnResize(e, 'closed')} className="absolute right-0 top-0 h-full w-2 cursor-col-resize" />
+                    </th>
+                    <th style={{width: `${columnWidths.status}px`}} className="p-6 font-black text-gray-400 uppercase text-[9px] relative">Estado
+                      <div onMouseDown={(e) => startColumnResize(e, 'status')} className="absolute right-0 top-0 h-full w-2 cursor-col-resize" />
+                    </th>
+                    <th style={{width: `${columnWidths.actions}px`}} className="p-6 font-black text-gray-400 uppercase text-[9px] relative">Acciones
+                      <div onMouseDown={(e) => startColumnResize(e, 'actions')} className="absolute right-0 top-0 h-full w-2 cursor-col-resize" />
+                    </th>
                   </tr>
                 </thead>
               <tbody className="divide-y divide-gray-50">
@@ -579,23 +637,23 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                         </div>
                       </div>
                     </td>
-                    <td className="p-6 font-black text-indigo-600">{req.agentName || '-'}</td>
-                    <td className="p-6 text-gray-500">{req.createdAt ? new Date(Number(req.createdAt)).toLocaleString('es-ES', {
+                    <td style={{width: `${columnWidths.agent}px`}} className="p-6 font-black text-indigo-600">{req.agentName || '-'}</td>
+                    <td style={{width: `${columnWidths.created}px`}} className="p-6 text-gray-500">{req.createdAt ? new Date(Number(req.createdAt)).toLocaleString('es-ES', {
                       day: '2-digit', month: '2-digit', year: 'numeric',
                       hour: '2-digit', minute: '2-digit'
                     }) : '-'}</td>
-                    <td className="p-6 text-gray-400">
+                    <td style={{width: `${columnWidths.closed}px`}} className="p-6 text-gray-400">
                       {req.completedAt ? new Date(Number(req.completedAt)).toLocaleString('es-ES', { 
                         day: '2-digit', month: '2-digit', year: 'numeric',
                         hour: '2-digit', minute: '2-digit'
                       }) : '-'}
                     </td>
-                    <td className="p-6">
+                    <td style={{width: `${columnWidths.status}px`}} className="p-6">
                       <span className={`text-[8px] font-black px-2 py-1 rounded uppercase ${req.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
                         {statusLabel(req.status).toUpperCase()}
                       </span>
                     </td>
-                    <td className="p-6 w-36">
+                    <td style={{width: `${columnWidths.actions}px`}} className="p-6 w-36">
                       <button onClick={() => onUpdateStatus(req.id, 'waiting')} className="bg-indigo-50 text-indigo-600 text-[9px] font-black px-3 py-2 rounded-xl flex items-center space-x-2"><RotateCcw size={14}/><span>REABRIR</span></button>
                     </td>
                   </tr>
