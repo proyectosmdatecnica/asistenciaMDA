@@ -528,11 +528,12 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
         <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm animate-in fade-in">
            <table className="w-full text-left text-xs border-collapse table-fixed">
                 <thead>
-                  <tr className="bg-gray-50 border-b border-gray-100">
+                    <tr className="bg-gray-50 border-b border-gray-100">
                     <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-28">ID</th>
                     <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-56">Usuario</th>
                     <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-1/2">Asunto</th>
                     <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-56">Agente</th>
+                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-44">Creado</th>
                     <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-44">Cierre</th>
                     <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-28">Estado</th>
                     <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-36">Acciones</th>
@@ -552,6 +553,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       </div>
                     </td>
                     <td className="p-6 font-black text-indigo-600">{req.agentName || '-'}</td>
+                    <td className="p-6 text-gray-500">{req.createdAt ? new Date(Number(req.createdAt)).toLocaleString('es-ES', {
+                      day: '2-digit', month: '2-digit', year: 'numeric',
+                      hour: '2-digit', minute: '2-digit'
+                    }) : '-'}</td>
                     <td className="p-6 text-gray-400">
                       {req.completedAt ? new Date(Number(req.completedAt)).toLocaleString('es-ES', { 
                         day: '2-digit', month: '2-digit', year: 'numeric',
