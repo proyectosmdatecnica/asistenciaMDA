@@ -192,6 +192,32 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
     }
   };
 
+  const renderDetailModal = () => {
+    if (!selectedRequest) return null;
+    return (
+      <div className="fixed inset-0 z-60 flex items-center justify-center">
+        <div onClick={() => setSelectedRequest(null)} className="absolute inset-0 bg-black/40" />
+        <div className="relative z-70 w-[min(95vw,900px)] max-h-[85vh] overflow-auto bg-white rounded-2xl shadow-2xl border border-gray-100 p-6">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h3 className="text-lg font-black text-gray-900">{selectedRequest.subject}</h3>
+              <p className="text-xs text-gray-500 mt-1">ID: {selectedRequest.id} — {selectedRequest.userName}</p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className={`text-[10px] font-black px-2 py-1 rounded ${selectedRequest.status === 'waiting' ? 'bg-amber-50 text-amber-600' : selectedRequest.status === 'in-progress' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>{statusLabel(selectedRequest.status)}</span>
+              <button onClick={() => setSelectedRequest(null)} className="text-gray-400 hover:text-gray-700">Cerrar</button>
+            </div>
+          </div>
+          <div className="prose max-w-none text-sm text-gray-700 whitespace-pre-wrap mb-4">{selectedRequest.description || 'Sin descripción adicional.'}</div>
+          <div className="flex justify-between items-center text-sm text-gray-500">
+            <div>Creado: {selectedRequest.createdAt ? new Date(Number(selectedRequest.createdAt)).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</div>
+            <div>Agente: {selectedRequest.agentName || '-'}</div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12 animate-in fade-in">
       {/* Stats */}
@@ -579,29 +605,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
         </div>
       )}
     </div>
-    {/* Detail modal */}
-    {selectedRequest && (
-      <div className="fixed inset-0 z-60 flex items-center justify-center">
-        <div onClick={() => setSelectedRequest(null)} className="absolute inset-0 bg-black/40" />
-        <div className="relative z-70 w-[min(95vw,900px)] max-h-[85vh] overflow-auto bg-white rounded-2xl shadow-2xl border border-gray-100 p-6">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <h3 className="text-lg font-black text-gray-900">{selectedRequest.subject}</h3>
-              <p className="text-xs text-gray-500 mt-1">ID: {selectedRequest.id} — {selectedRequest.userName}</p>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span className={`text-[10px] font-black px-2 py-1 rounded ${selectedRequest.status === 'waiting' ? 'bg-amber-50 text-amber-600' : selectedRequest.status === 'in-progress' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>{statusLabel(selectedRequest.status)}</span>
-              <button onClick={() => setSelectedRequest(null)} className="text-gray-400 hover:text-gray-700">Cerrar</button>
-            </div>
-          </div>
-          <div className="prose max-w-none text-sm text-gray-700 whitespace-pre-wrap mb-4">{selectedRequest.description || 'Sin descripción adicional.'}</div>
-          <div className="flex justify-between items-center text-sm text-gray-500">
-            <div>Creado: {selectedRequest.createdAt ? new Date(Number(selectedRequest.createdAt)).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</div>
-            <div>Agente: {selectedRequest.agentName || '-'}</div>
-          </div>
-        </div>
-      </div>
-    )}
+    {renderDetailModal()}
   );
 };
 
