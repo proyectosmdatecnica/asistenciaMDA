@@ -42,16 +42,6 @@
     "identity",
     "messageTeamMembers"
   ],
-  "authorization": {
-    "permissions": {
-      "resourceSpecific": [
-        {
-          "name": "User.Read",
-          "type": "Delegated"
-        }
-      ]
-    }
-  },
   "validDomains": [
     "black-pond-084e07c0f.1.azurestaticapps.net",
     "*.azurestaticapps.net"

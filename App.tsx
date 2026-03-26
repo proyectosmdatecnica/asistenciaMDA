@@ -18,6 +18,9 @@ const App: React.FC = () => {
   const [lastSyncStatus, setLastSyncStatus] = useState<'online' | 'offline'>('online');
   const [countdown, setCountdown] = useState(15);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [manualEmailRequired, setManualEmailRequired] = useState(false);
+  const [manualEmail, setManualEmail] = useState('');
+  const [manualEmailError, setManualEmailError] = useState('');
   
   const prevWaitingCount = useRef(0);
 
@@ -111,17 +114,20 @@ const App: React.FC = () => {
               }
             }
 
-            if (candidate && candidate !== 'undefined' && candidate !== 'null') {
+            if (candidate && candidate !== 'undefined' && candidate !== 'null' && candidate !== 'user-guest') {
               setCurrentUserId(candidate);
               if (!currentUserName || currentUserName === 'Usuario Invitado') {
                 setCurrentUserName(context?.user?.displayName || candidate);
               }
+              setManualEmailRequired(false);
               console.debug('[app] set currentUserId:', candidate);
             } else {
-              console.debug('[app] no usable user identity in context, staying guest');
+              console.debug('[app] no usable user identity in context, requiring manual email');
+              setManualEmailRequired(true);
             }
           } catch (e) {
             console.debug('[app] teams init/getContext failed', e);
+            setManualEmailRequired(true);
           }
         }
       } catch (e) {
@@ -257,7 +263,34 @@ const App: React.FC = () => {
           <button onClick={() => refreshData()} className="p-1.5 hover:bg-gray-100 rounded-full"><RefreshCw size={12} className="text-indigo-400" /></button>
         </div>
 
-        {role === 'agent' ? (
+        {manualEmailRequired ? (
+          <div className="max-w-lg mx-auto p-6 mt-16 bg-white rounded-xl shadow-md border border-gray-200">
+            <h2 className="text-lg font-bold mb-3">Complete su correo electrónico</h2>
+            <p className="text-sm text-gray-600 mb-4">No se pudo determinar automáticamente quién está usando Teams Web. Ingrese su e-mail para continuar.</p>
+            <input
+              type="email"
+              value={manualEmail}
+              onChange={(e) => { setManualEmail(e.target.value); setManualEmailError(''); }}
+              className="w-full border rounded px-3 py-2 mb-2"
+              placeholder="usuario@dominio.com"
+            />
+            {manualEmailError && <p className="text-sm text-red-600 mb-2">{manualEmailError}</p>}
+            <button
+              onClick={async () => {
+                const email = manualEmail.trim().toLowerCase();
+                if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                  setManualEmailError('Por favor ingrese un e-mail válido');
+                  return;
+                }
+                setCurrentUserId(email);
+                setCurrentUserName(email);
+                setManualEmailRequired(false);
+                await refreshData(true);
+              }}
+              className="w-full bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
+            >Usar este correo</button>
+          </div>
+        ) : role === 'agent' ? (
           <AgentDashboard 
             requests={requests} 
             stats={stats} 
