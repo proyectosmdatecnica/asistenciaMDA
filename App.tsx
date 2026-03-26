@@ -74,13 +74,40 @@ const App: React.FC = () => {
             await teams.app.initialize();
             const context = await teams.app.getContext();
             console.debug('[app] teams context:', context);
+
             // Try multiple fallbacks for identifying the user in different hosts (desktop/web)
             const fallbackEmail = context?.user?.userPrincipalName || context?.user?.loginHint || context?.user?.email || context?.user?.upn;
             const fallbackId = context?.user?.id || context?.user?.userObjectId || context?.user?.userId;
-            const candidate = String(fallbackEmail || fallbackId || '').toLowerCase();
+            let candidate = String(fallbackEmail || fallbackId || '').toLowerCase();
+
+            // Force Graph lookup if we have Teams auth available (especially for web guest mismatch)
+            try {
+              const token = await teams.authentication.getAuthToken({ resources: ['https://graph.microsoft.com'] });
+              if (token) {
+                const graphRes = await fetch('https://graph.microsoft.com/v1.0/me', {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                if (graphRes.ok) {
+                  const me = await graphRes.json();
+                  if (me && me.userPrincipalName) {
+                    candidate = String(me.userPrincipalName).toLowerCase();
+                    setCurrentUserName(me.displayName || candidate);
+                    console.debug('[app] got user from Graph /me:', candidate);
+                  }
+                } else {
+                  const errText = await graphRes.text();
+                  console.debug('[app] Graph /me failed', graphRes.status, errText);
+                }
+              }
+            } catch (graphErr) {
+              console.debug('[app] teams authentication/getAuthToken Graph fallback failed', graphErr);
+            }
+
             if (candidate && candidate !== 'undefined' && candidate !== 'null') {
               setCurrentUserId(candidate);
-              setCurrentUserName(context?.user?.displayName || candidate);
+              if (!currentUserName || currentUserName === 'Usuario Invitado') {
+                setCurrentUserName(context?.user?.displayName || candidate);
+              }
               console.debug('[app] set currentUserId:', candidate);
             } else {
               console.debug('[app] no usable user identity in context, staying guest');
