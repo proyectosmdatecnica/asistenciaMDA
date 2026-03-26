@@ -74,6 +74,7 @@ const App: React.FC = () => {
             await teams.app.initialize();
             const context = await teams.app.getContext();
             console.debug('[app] teams context:', context);
+            console.debug('[app] host:', context?.app?.host); // Log if it's web or desktop
 
             // Try multiple fallbacks for identifying the user in different hosts (desktop/web)
             const fallbackEmail = context?.user?.userPrincipalName || context?.user?.loginHint || context?.user?.email || context?.user?.upn;
@@ -81,26 +82,33 @@ const App: React.FC = () => {
             let candidate = String(fallbackEmail || fallbackId || '').toLowerCase();
 
             // Force Graph lookup if we have Teams auth available (especially for web guest mismatch)
+            let token;
             try {
-              const token = await teams.authentication.getAuthToken({ resources: ['https://graph.microsoft.com'] });
-              if (token) {
-                const graphRes = await fetch('https://graph.microsoft.com/v1.0/me', {
-                  headers: { Authorization: `Bearer ${token}` }
-                });
-                if (graphRes.ok) {
-                  const me = await graphRes.json();
-                  if (me && me.userPrincipalName) {
-                    candidate = String(me.userPrincipalName).toLowerCase();
-                    setCurrentUserName(me.displayName || candidate);
-                    console.debug('[app] got user from Graph /me:', candidate);
-                  }
-                } else {
-                  const errText = await graphRes.text();
-                  console.debug('[app] Graph /me failed', graphRes.status, errText);
-                }
+              token = await teams.authentication.getAuthToken({ silent: true, resources: ['https://graph.microsoft.com'] });
+            } catch (silentErr) {
+              console.debug('[app] silent auth failed, trying interactive', silentErr);
+              try {
+                token = await teams.authentication.getAuthToken({ silent: false, resources: ['https://graph.microsoft.com'] });
+              } catch (interactiveErr) {
+                console.debug('[app] interactive auth also failed', interactiveErr);
+                token = null;
               }
-            } catch (graphErr) {
-              console.debug('[app] teams authentication/getAuthToken Graph fallback failed', graphErr);
+            }
+            if (token) {
+              const graphRes = await fetch('https://graph.microsoft.com/v1.0/me', {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              if (graphRes.ok) {
+                const me = await graphRes.json();
+                if (me && me.userPrincipalName) {
+                  candidate = String(me.userPrincipalName).toLowerCase();
+                  setCurrentUserName(me.displayName || candidate);
+                  console.debug('[app] got user from Graph /me:', candidate);
+                }
+              } else {
+                const errText = await graphRes.text();
+                console.debug('[app] Graph /me failed', graphRes.status, errText);
+              }
             }
 
             if (candidate && candidate !== 'undefined' && candidate !== 'null') {
