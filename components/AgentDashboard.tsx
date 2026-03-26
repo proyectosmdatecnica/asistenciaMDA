@@ -218,7 +218,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
     );
   };
 
-  return (
+  return (<> 
     <div className="max-w-7xl mx-auto space-y-6 pb-12 animate-in fade-in">
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
@@ -606,6 +606,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
       )}
     </div>
     {renderDetailModal()}
+    </>
   );
 };
 
