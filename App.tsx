@@ -42,6 +42,10 @@ const App: React.FC = () => {
 
       if (mergedAgents.some((a:string) => a.toLowerCase() === currentUserId.toLowerCase())) {
         setRole('agent');
+      } else if (role === 'agent') {
+        // stay as agent if already agent and no data yet
+      } else {
+        setRole('user');
       }
 
       if (role === 'agent') {
@@ -71,14 +75,15 @@ const App: React.FC = () => {
             const context = await teams.app.getContext();
             console.debug('[app] teams context:', context);
             // Try multiple fallbacks for identifying the user in different hosts (desktop/web)
-            const upn = context?.user?.userPrincipalName || context?.user?.id || context?.user?.userObjectId || context?.user?.userId;
-            if (upn) {
-              const normalized = String(upn).toLowerCase();
-              setCurrentUserId(normalized);
-              setCurrentUserName(context.user.displayName || normalized);
-              console.debug('[app] set currentUserId:', normalized);
+            const fallbackEmail = context?.user?.userPrincipalName || context?.user?.loginHint || context?.user?.email || context?.user?.upn;
+            const fallbackId = context?.user?.id || context?.user?.userObjectId || context?.user?.userId;
+            const candidate = String(fallbackEmail || fallbackId || '').toLowerCase();
+            if (candidate && candidate !== 'undefined' && candidate !== 'null') {
+              setCurrentUserId(candidate);
+              setCurrentUserName(context?.user?.displayName || candidate);
+              console.debug('[app] set currentUserId:', candidate);
             } else {
-              console.debug('[app] no userPrincipalName in context');
+              console.debug('[app] no usable user identity in context, staying guest');
             }
           } catch (e) {
             console.debug('[app] teams init/getContext failed', e);
@@ -98,6 +103,14 @@ const App: React.FC = () => {
       refreshData();
     }
   }, [isTeamsReady, currentUserId, refreshData]);
+
+  // Ensure role is recalculated whenever current user or authorized agents list changes
+  useEffect(() => {
+    const normalized = currentUserId.toLowerCase();
+    const localAgentEmail = (localStorage.getItem('localAgentEmail') || '').toLowerCase();
+    const isAgent = authorizedAgents.some((a)=> a.toLowerCase() === normalized || a.toLowerCase() === localAgentEmail);
+    setRole(isAgent ? 'agent' : 'user');
+  }, [authorizedAgents, currentUserId]);
 
   useEffect(() => {
     const interval = setInterval(() => {
