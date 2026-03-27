@@ -700,3 +700,80 @@ export async function notificationsLogsHandler(req: HttpRequest, context: Invoca
 }
 
 app.http('notificationsLogs', { methods: ['GET'], authLevel: 'anonymous', route: 'notifications/logs', handler: notificationsLogsHandler });
+
+// Stats handler: computes average and median wait (minutes) over recent window and caches in DB
+export async function statsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    try {
+        const poolConnection = await getPool(context);
+
+        // ensure cached_stats table
+        await poolConnection.request().query(`
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='cached_stats' AND xtype='U')
+            BEGIN
+                CREATE TABLE cached_stats (
+                    stat_key VARCHAR(128) PRIMARY KEY,
+                    json_value NVARCHAR(MAX) NOT NULL,
+                    updatedAt BIGINT NOT NULL
+                );
+            END
+        `);
+
+        // try read cached value
+        const now = Date.now();
+        const ttlMs = 60 * 60 * 1000; // 1 hour
+        const cached = await poolConnection.request().input('key', sql.VarChar, 'avgWait').query("SELECT json_value, updatedAt FROM cached_stats WHERE stat_key = @key");
+        if (cached.recordset && cached.recordset.length > 0) {
+            const row = cached.recordset[0];
+            if (row.updatedAt && (now - Number(row.updatedAt) < ttlMs)) {
+                try {
+                    return { status: 200, jsonBody: JSON.parse(row.json_value) };
+                } catch (e) {
+                    // fallthrough to recompute on parse error
+                }
+            }
+        }
+
+        // Recompute: avg and median wait (minutes) for tickets with startedAt, within last 30 days
+        // Use epoch ms arithmetic: (startedAt - createdAt)/60000.0
+        const computeSql = `
+            DECLARE @threshold BIGINT = DATEDIFF_BIG(MILLISECOND, '1970-01-01', GETUTCDATE()) - 30 * 24 * 60 * 60 * 1000;
+            WITH waits AS (
+                SELECT CAST((startedAt - createdAt) AS FLOAT) / 60000.0 AS waitMinutes
+                FROM requests
+                WHERE startedAt IS NOT NULL AND createdAt IS NOT NULL AND createdAt >= @threshold
+            )
+            SELECT
+                ISNULL(AVG(waitMinutes), 0) AS avgWaitMinutes,
+                (SELECT CASE WHEN COUNT(*) = 0 THEN 0 ELSE PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY waitMinutes) FROM waits END) AS medianWaitMinutes,
+                (SELECT COUNT(*) FROM waits) AS sampleCount;
+        `;
+
+        const res = await poolConnection.request().query(computeSql);
+        const statsRow = res.recordset && res.recordset[0] ? res.recordset[0] : { avgWaitMinutes: 0, medianWaitMinutes: 0, sampleCount: 0 };
+
+        const payload = {
+            avgWaitMinutes: Number(statsRow.avgWaitMinutes) || 0,
+            medianWaitMinutes: Number(statsRow.medianWaitMinutes) || 0,
+            sampleCount: Number(statsRow.sampleCount) || 0,
+            windowDays: 30,
+            computedAt: now
+        };
+
+        const payloadStr = JSON.stringify(payload);
+        // upsert into cached_stats
+        await poolConnection.request().input('key', sql.VarChar, 'avgWait').input('val', sql.NVarChar, payloadStr).input('now', sql.BigInt, now)
+            .query(`
+                IF EXISTS (SELECT 1 FROM cached_stats WHERE stat_key = @key)
+                    UPDATE cached_stats SET json_value = @val, updatedAt = @now WHERE stat_key = @key
+                ELSE
+                    INSERT INTO cached_stats (stat_key, json_value, updatedAt) VALUES (@key, @val, @now)
+            `);
+
+        return { status: 200, jsonBody: payload };
+    } catch (err:any) {
+        context.error('statsHandler error', err && err.message || err);
+        return { status: 500, jsonBody: { error: err && err.message || err } };
+    }
+}
+
+app.http('stats', { methods: ['GET'], authLevel: 'anonymous', route: 'stats', handler: statsHandler });

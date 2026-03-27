@@ -18,6 +18,9 @@ const App: React.FC = () => {
   const [lastSyncStatus, setLastSyncStatus] = useState<'online' | 'offline'>('online');
   const [countdown, setCountdown] = useState(15);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [manualEmailRequired, setManualEmailRequired] = useState(false);
+  const [manualEmail, setManualEmail] = useState('');
+  const [manualEmailError, setManualEmailError] = useState('');
   
   const prevWaitingCount = useRef(0);
 
@@ -42,6 +45,10 @@ const App: React.FC = () => {
 
       if (mergedAgents.some((a:string) => a.toLowerCase() === currentUserId.toLowerCase())) {
         setRole('agent');
+      } else if (role === 'agent') {
+        // stay as agent if already agent and no data yet
+      } else {
+        setRole('user');
       }
 
       if (role === 'agent') {
@@ -70,18 +77,57 @@ const App: React.FC = () => {
             await teams.app.initialize();
             const context = await teams.app.getContext();
             console.debug('[app] teams context:', context);
+            console.debug('[app] host:', context?.app?.host); // Log if it's web or desktop
+
             // Try multiple fallbacks for identifying the user in different hosts (desktop/web)
-            const upn = context?.user?.userPrincipalName || context?.user?.id || context?.user?.userObjectId || context?.user?.userId;
-            if (upn) {
-              const normalized = String(upn).toLowerCase();
-              setCurrentUserId(normalized);
-              setCurrentUserName(context.user.displayName || normalized);
-              console.debug('[app] set currentUserId:', normalized);
+            const fallbackEmail = context?.user?.userPrincipalName || context?.user?.loginHint || context?.user?.email || context?.user?.upn;
+            const fallbackId = context?.user?.id || context?.user?.userObjectId || context?.user?.userId;
+            let candidate = String(fallbackEmail || fallbackId || '').toLowerCase();
+
+            // Force Graph lookup if we have Teams auth available (especially for web guest mismatch)
+            let token;
+            try {
+              token = await teams.authentication.getAuthToken({ silent: true, resources: ['https://graph.microsoft.com'] });
+            } catch (silentErr) {
+              console.debug('[app] silent auth failed, trying interactive', silentErr);
+              try {
+                token = await teams.authentication.getAuthToken({ silent: false, resources: ['https://graph.microsoft.com'] });
+              } catch (interactiveErr) {
+                console.debug('[app] interactive auth also failed', interactiveErr);
+                token = null;
+              }
+            }
+            if (token) {
+              const graphRes = await fetch('https://graph.microsoft.com/v1.0/me', {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              if (graphRes.ok) {
+                const me = await graphRes.json();
+                if (me && me.userPrincipalName) {
+                  candidate = String(me.userPrincipalName).toLowerCase();
+                  setCurrentUserName(me.displayName || candidate);
+                  console.debug('[app] got user from Graph /me:', candidate);
+                }
+              } else {
+                const errText = await graphRes.text();
+                console.debug('[app] Graph /me failed', graphRes.status, errText);
+              }
+            }
+
+            if (candidate && candidate !== 'undefined' && candidate !== 'null' && candidate !== 'user-guest') {
+              setCurrentUserId(candidate);
+              if (!currentUserName || currentUserName === 'Usuario Invitado') {
+                setCurrentUserName(context?.user?.displayName || candidate);
+              }
+              setManualEmailRequired(false);
+              console.debug('[app] set currentUserId:', candidate);
             } else {
-              console.debug('[app] no userPrincipalName in context');
+              console.debug('[app] no usable user identity in context, requiring manual email');
+              setManualEmailRequired(true);
             }
           } catch (e) {
             console.debug('[app] teams init/getContext failed', e);
+            setManualEmailRequired(true);
           }
         }
       } catch (e) {
@@ -98,6 +144,14 @@ const App: React.FC = () => {
       refreshData();
     }
   }, [isTeamsReady, currentUserId, refreshData]);
+
+  // Ensure role is recalculated whenever current user or authorized agents list changes
+  useEffect(() => {
+    const normalized = currentUserId.toLowerCase();
+    const localAgentEmail = (localStorage.getItem('localAgentEmail') || '').toLowerCase();
+    const isAgent = authorizedAgents.some((a)=> a.toLowerCase() === normalized || a.toLowerCase() === localAgentEmail);
+    setRole(isAgent ? 'agent' : 'user');
+  }, [authorizedAgents, currentUserId]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -190,8 +244,9 @@ const App: React.FC = () => {
     }
   };
 
+  // Show any request belonging to the user except completed/cancelled
   const activeRequestsForUser = useMemo(() => 
-    requests.filter(r => r.userId === currentUserId && (r.status === 'waiting' || r.status === 'in-progress'))
+    requests.filter(r => r.userId === currentUserId && r.status !== 'completed' && r.status !== 'cancelled')
   , [requests, currentUserId]);
 
   if (!isTeamsReady) return <div className="h-screen w-full flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-[#5b5fc7]" size={40} /></div>;
@@ -208,7 +263,34 @@ const App: React.FC = () => {
           <button onClick={() => refreshData()} className="p-1.5 hover:bg-gray-100 rounded-full"><RefreshCw size={12} className="text-indigo-400" /></button>
         </div>
 
-        {role === 'agent' ? (
+        {manualEmailRequired ? (
+          <div className="max-w-lg mx-auto p-6 mt-16 bg-white rounded-xl shadow-md border border-gray-200">
+            <h2 className="text-lg font-bold mb-3">Complete su correo electrónico</h2>
+            <p className="text-sm text-gray-600 mb-4">No se pudo determinar automáticamente quién está usando Teams Web. Ingrese su e-mail para continuar.</p>
+            <input
+              type="email"
+              value={manualEmail}
+              onChange={(e) => { setManualEmail(e.target.value); setManualEmailError(''); }}
+              className="w-full border rounded px-3 py-2 mb-2"
+              placeholder="usuario@dominio.com"
+            />
+            {manualEmailError && <p className="text-sm text-red-600 mb-2">{manualEmailError}</p>}
+            <button
+              onClick={async () => {
+                const email = manualEmail.trim().toLowerCase();
+                if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                  setManualEmailError('Por favor ingrese un e-mail válido');
+                  return;
+                }
+                setCurrentUserId(email);
+                setCurrentUserName(email);
+                setManualEmailRequired(false);
+                await refreshData(true);
+              }}
+              className="w-full bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
+            >Usar este correo</button>
+          </div>
+        ) : role === 'agent' ? (
           <AgentDashboard 
             requests={requests} 
             stats={stats} 
@@ -217,6 +299,7 @@ const App: React.FC = () => {
             onManageAgent={handleAgentManagement}
             onRefreshAgents={refreshData}
             currentUserId={currentUserId}
+            onCreateTicket={handleCreateOrUpdate}
           />
         ) : (
           <UserRequestView 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { SupportRequest, QueueStats } from '../types';
 import { 
-  Clock, CheckCircle, Search, Zap, List, LayoutGrid, Settings, Plus, Trash2, Activity, MessageCircle, RotateCcw, XCircle, Pause, Play
+  Clock, CheckCircle, Search, Zap, List, LayoutGrid, Settings, Plus, Trash2, Activity, MessageCircle, RotateCcw, XCircle, Pause, Play, X, Send, Loader2
 } from 'lucide-react';
 import usePendingNotifications from '../hooks/usePendingNotifications';
 import { storageService } from '../services/dataService';
@@ -14,9 +14,10 @@ interface AgentDashboardProps {
   onManageAgent: (action: 'add' | 'remove', email: string) => void;
   onRefreshAgents?: () => Promise<void>;
   currentUserId?: string;
+  onCreateTicket?: (request: Partial<SupportRequest>) => void;
 }
 
-const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpdateStatus, agents, onManageAgent, onRefreshAgents, currentUserId }) => {
+const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpdateStatus, agents, onManageAgent, onRefreshAgents, currentUserId, onCreateTicket }) => {
   const [now, setNow] = useState(Date.now());
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'queue' | 'history' | 'settings'>('queue');
@@ -25,6 +26,14 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
   const [pendingRequests, setPendingRequests] = useState<string[]>([]);
   const [notifyEnabled, setNotifyEnabled] = useState<boolean>(true);
   const [localAgentEmail, setLocalAgentEmail] = useState<string>('');
+  const [selectedRequest, setSelectedRequest] = useState<SupportRequest | null>(null);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [showCreateTicket, setShowCreateTicket] = useState(false);
+  const [ticketSubject, setTicketSubject] = useState('');
+  const [ticketDescription, setTicketDescription] = useState('');
+  const [ticketPriority, setTicketPriority] = useState<SupportRequest['priority']>('medium');
+  const [isCreatingTicket, setIsCreatingTicket] = useState(false);
+  const ITEMS_PER_PAGE = 20;
 
   // Poll for pending tickets and show desktop notifications (agents only)
   usePendingNotifications({ pollIntervalMs: 30000, apiUrl: '/api/requests', reminderIntervalMs: 5 * 60 * 1000, currentUserId });
@@ -191,7 +200,35 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
     }
   };
 
-  return (
+  const renderDetailModal = () => {
+    if (!selectedRequest) return null;
+    return (
+      <div className="fixed inset-0 z-60 flex items-center justify-center">
+        <div onClick={() => setSelectedRequest(null)} className="absolute inset-0 bg-black/40" />
+        <div className="relative z-70 w-[min(95vw,900px)] max-h-[85vh] overflow-auto bg-white rounded-2xl shadow-2xl border border-gray-100 p-6">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h3 className="text-lg font-black text-gray-900">{selectedRequest.subject}</h3>
+              <p className="text-xs text-gray-500 mt-1">ID: {selectedRequest.id} — {selectedRequest.userName}</p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className={`text-[10px] font-black px-2 py-1 rounded ${selectedRequest.status === 'waiting' ? 'bg-amber-50 text-amber-600' : selectedRequest.status === 'in-progress' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>{statusLabel(selectedRequest.status)}</span>
+              <button onClick={() => setSelectedRequest(null)} className="text-gray-400 hover:text-gray-700">Cerrar</button>
+            </div>
+          </div>
+          <div className="prose max-w-none text-sm text-gray-700 whitespace-pre-wrap mb-4">{selectedRequest.description || 'Sin descripción adicional.'}</div>
+          <div className="flex justify-between items-center text-sm text-gray-500">
+            <div>Creado: {selectedRequest.createdAt ? new Date(Number(selectedRequest.createdAt)).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</div>
+            <div>Agente: {selectedRequest.agentName || '-'}</div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  
+
+  return (<> 
     <div className="max-w-7xl mx-auto space-y-6 pb-12 animate-in fade-in">
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
@@ -222,6 +259,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
             <input type="text" placeholder="Filtrar..." className="bg-transparent border-none outline-none text-xs font-bold w-full" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
           <div className="ml-3 flex items-center space-x-2">
+            <button onClick={() => setShowCreateTicket(true)} title="Crear Ticket Personal" className="p-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all"><Plus size={16} /></button>
             <button onClick={() => setViewMode('grid')} title="Vista en grilla" className={`p-2 rounded-xl ${viewMode === 'grid' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-400 hover:bg-gray-100'}`}><LayoutGrid size={16} /></button>
             <button onClick={() => setViewMode('standard')} title="Vista en tarjetas" className={`p-2 rounded-xl ${viewMode === 'standard' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-400 hover:bg-gray-100'}`}><List size={16} /></button>
           </div>
@@ -254,9 +292,12 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       <td className="p-3 font-black text-gray-800">{req.id}</td>
                       <td className="p-3 text-sm font-bold text-gray-700">{req.userName}</td>
                       <td className="p-3 text-sm text-gray-600">
-                        <span title={(req.description && req.description.length > 0) ? `${req.subject} — ${req.description}` : req.subject} className="block truncate max-w-[28rem]">
-                          {req.subject}
-                        </span>
+                          <div className="relative group max-w-[28rem]">
+                            <span onClick={() => setSelectedRequest(req)} role="button" tabIndex={0} className="block truncate cursor-pointer hover:underline">{req.subject}</span>
+                            <div className="hidden group-hover:block absolute left-0 top-full mt-2 z-50 w-[min(60vw,40rem)] max-h-[35vh] overflow-auto bg-white p-3 rounded-lg shadow-lg border border-gray-100 text-sm text-gray-700 whitespace-pre-wrap">
+                              {(req.description && req.description.length > 0) ? `${req.subject} — ${req.description}` : req.subject}
+                            </div>
+                          </div>
                       </td>
                       <td className="p-3 text-sm">
                         <span className={`text-[9px] font-black px-2 py-1 rounded ${req.priority === 'urgent' ? 'bg-red-600 text-white' : req.priority === 'high' ? 'bg-amber-100 text-amber-700' : req.priority === 'medium' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>{priorityLabel(req.priority)}</span>
@@ -525,48 +566,186 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
         <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm animate-in fade-in">
            <table className="w-full text-left text-xs border-collapse table-fixed">
                 <thead>
-                  <tr className="bg-gray-50 border-b border-gray-100">
-                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-28">ID</th>
-                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-56">Usuario</th>
-                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-1/2">Asunto</th>
-                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-56">Agente</th>
-                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-44">Cierre</th>
-                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-28">Estado</th>
-                    <th className="p-6 font-black text-gray-400 uppercase text-[9px] w-36">Acciones</th>
+                    <tr className="bg-gray-50 border-b border-gray-100">
+                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-28">ID</th>
+                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-56">Usuario</th>
+                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-1/2">Asunto</th>
+                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-56">Agente</th>
+                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-44">Creado</th>
+                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-44">Cierre</th>
+                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-28">Estado</th>
+                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-36">Acciones</th>
                   </tr>
                 </thead>
               <tbody className="divide-y divide-gray-50">
-                {completed.map(req => (
-                  <tr key={req.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="p-6 font-black text-gray-900">{req.id}</td>
-                    <td className="p-6 font-black text-gray-900">{req.userName}</td>
-                    <td className="p-6 font-bold text-gray-600">
-                      <span title={(req.description && req.description.length > 0) ? `${req.subject} — ${req.description}` : req.subject} className="block truncate max-w-[28rem]">
-                        {req.subject}
-                      </span>
-                    </td>
-                    <td className="p-6 font-black text-indigo-600">{req.agentName || '-'}</td>
-                    <td className="p-6 text-gray-400">
-                      {req.completedAt ? new Date(Number(req.completedAt)).toLocaleString('es-ES', { 
+                {(() => {
+                  const startIdx = (historyPage - 1) * ITEMS_PER_PAGE;
+                  const endIdx = startIdx + ITEMS_PER_PAGE;
+                  return completed.slice(startIdx, endIdx).map(req => (
+                    <tr key={req.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="p-4 font-black text-gray-900">{req.id}</td>
+                      <td className="p-4 font-black text-gray-900">{req.userName}</td>
+                      <td className="p-4 font-bold text-gray-600">
+                        <div className="relative group max-w-[28rem]">
+                          <span onClick={() => setSelectedRequest(req)} role="button" tabIndex={0} className="block truncate cursor-pointer hover:underline">{req.subject}</span>
+                          <div className="hidden group-hover:block absolute left-0 top-full mt-2 z-50 w-[min(60vw,40rem)] max-h-[35vh] overflow-auto bg-white p-3 rounded-lg shadow-lg border border-gray-100 text-sm text-gray-700 whitespace-pre-wrap">
+                            {(req.description && req.description.length > 0) ? `${req.subject} — ${req.description}` : req.subject}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4 font-black text-indigo-600">{req.agentName || '-'}</td>
+                      <td className="p-4 text-gray-500">{req.createdAt ? new Date(Number(req.createdAt)).toLocaleString('es-ES', {
                         day: '2-digit', month: '2-digit', year: 'numeric',
                         hour: '2-digit', minute: '2-digit'
-                      }) : '-'}
-                    </td>
-                    <td className="p-6">
-                      <span className={`text-[8px] font-black px-2 py-1 rounded uppercase ${req.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                        {statusLabel(req.status).toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="p-6 w-36">
-                      <button onClick={() => onUpdateStatus(req.id, 'waiting')} className="bg-indigo-50 text-indigo-600 text-[9px] font-black px-3 py-2 rounded-xl flex items-center space-x-2"><RotateCcw size={14}/><span>REABRIR</span></button>
-                    </td>
-                  </tr>
-                ))}
+                      }) : '-'}</td>
+                      <td className="p-4 text-gray-400">
+                        {req.completedAt ? new Date(Number(req.completedAt)).toLocaleString('es-ES', { 
+                          day: '2-digit', month: '2-digit', year: 'numeric',
+                          hour: '2-digit', minute: '2-digit'
+                        }) : '-'}
+                      </td>
+                      <td className="p-4">
+                        <span className={`text-[8px] font-black px-2 py-1 rounded uppercase ${req.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                          {statusLabel(req.status).toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="p-4 w-36">
+                        <button onClick={() => onUpdateStatus(req.id, 'waiting')} className="bg-indigo-50 text-indigo-600 text-[9px] font-black px-3 py-2 rounded-xl flex items-center space-x-2"><RotateCcw size={14}/><span>REABRIR</span></button>
+                      </td>
+                    </tr>
+                  ));
+                })()}
               </tbody>
            </table>
+
+           {/* Pagination Controls */}
+           <div className="bg-gray-50 border-t border-gray-100 p-4 flex items-center justify-between">
+             <div className="text-xs text-gray-600 font-bold">
+               Total: <span className="font-black text-gray-900">{completed.length}</span> tickets | Página <span className="font-black text-indigo-600">{historyPage}</span> de <span className="font-black text-indigo-600">{Math.ceil(completed.length / ITEMS_PER_PAGE) || 1}</span>
+             </div>
+             <div className="flex items-center space-x-2">
+               <button 
+                 onClick={() => setHistoryPage(prev => Math.max(1, prev - 1))}
+                 disabled={historyPage === 1}
+                 className="px-4 py-2 rounded-xl font-black text-xs uppercase transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-white border border-gray-200 text-gray-700 hover:enabled:bg-gray-100"
+               >Anterior</button>
+               
+               <div className="flex items-center space-x-1">
+                 {Array.from({ length: Math.ceil(completed.length / ITEMS_PER_PAGE) || 1 }).map((_, idx) => {
+                   const pageNum = idx + 1;
+                   const isActive = pageNum === historyPage;
+                   return (
+                     <button
+                       key={pageNum}
+                       onClick={() => setHistoryPage(pageNum)}
+                       className={`w-8 h-8 rounded-lg font-black text-xs transition-all ${isActive ? 'bg-indigo-600 text-white' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                     >{pageNum}</button>
+                   );
+                 })}
+               </div>
+
+               <button 
+                 onClick={() => setHistoryPage(prev => Math.min(Math.ceil(completed.length / ITEMS_PER_PAGE) || 1, prev + 1))}
+                 disabled={historyPage >= Math.ceil(completed.length / ITEMS_PER_PAGE) || completed.length === 0}
+                 className="px-4 py-2 rounded-xl font-black text-xs uppercase transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-white border border-gray-200 text-gray-700 hover:enabled:bg-gray-100"
+               >Siguiente</button>
+             </div>
+           </div>
         </div>
       )}
     </div>
+    {renderDetailModal()}
+
+    {/* Modal Crear Ticket Personal */}
+    {showCreateTicket && (
+      <div className="fixed inset-0 z-60 flex items-center justify-center">
+        <div onClick={() => setShowCreateTicket(false)} className="absolute inset-0 bg-black/40" />
+        <div className="relative z-70 w-[min(95vw,700px)] max-h-[90vh] overflow-auto bg-white rounded-3xl shadow-2xl border border-gray-100 p-8">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-black text-gray-900">Crear Ticket Personal</h3>
+            <button onClick={() => setShowCreateTicket(false)} className="text-gray-400 hover:text-gray-700"><X size={20} /></button>
+          </div>
+
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            if (!ticketSubject.trim() || !onCreateTicket) return;
+            setIsCreatingTicket(true);
+            try {
+              await onCreateTicket({ subject: ticketSubject, description: ticketDescription, priority: ticketPriority });
+              setTicketSubject('');
+              setTicketDescription('');
+              setTicketPriority('medium');
+              setShowCreateTicket(false);
+            } finally {
+              setIsCreatingTicket(false);
+            }
+          }} className="space-y-5">
+            <div>
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Asunto</label>
+              <input 
+                type="text" 
+                value={ticketSubject} 
+                onChange={e => setTicketSubject(e.target.value)}
+                placeholder="Ej: Laptop no prende"
+                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 focus:border-indigo-600 rounded-2xl font-bold text-sm outline-none"
+                required 
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Descripción</label>
+              <textarea 
+                value={ticketDescription} 
+                onChange={e => setTicketDescription(e.target.value)}
+                placeholder="Detalles del problema..."
+                rows={4}
+                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 focus:border-indigo-600 rounded-2xl font-bold text-sm outline-none resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Prioridad</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { value: 'low' as const, label: 'Baja', color: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
+                  { value: 'medium' as const, label: 'Media', color: 'bg-blue-50 text-blue-600 border-blue-200' },
+                  { value: 'high' as const, label: 'Alta', color: 'bg-amber-50 text-amber-600 border-amber-200' },
+                  { value: 'urgent' as const, label: 'Urgente', color: 'bg-red-50 text-red-600 border-red-200' }
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setTicketPriority(opt.value)}
+                    className={`py-2 px-3 rounded-xl border-2 font-black text-xs transition-all ${
+                      ticketPriority === opt.value 
+                        ? opt.color + ' shadow-md' 
+                        : 'bg-gray-50 text-gray-400 border-gray-200'
+                    }`}
+                  >{opt.label}</button>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-4 flex items-center space-x-3">
+              <button 
+                type="submit"
+                disabled={isCreatingTicket || !ticketSubject.trim()}
+                className="flex-1 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center space-x-2 hover:enabled:bg-indigo-700 disabled:opacity-50"
+              >
+                {isCreatingTicket ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                <span>{isCreatingTicket ? 'Creando...' : 'Crear Ticket'}</span>
+              </button>
+              <button 
+                type="button"
+                onClick={() => setShowCreateTicket(false)}
+                className="px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest text-gray-600 bg-gray-100 hover:bg-gray-200"
+              >Cancelar</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 
