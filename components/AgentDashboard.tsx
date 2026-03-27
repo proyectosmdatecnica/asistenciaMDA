@@ -26,6 +26,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
   const [notifyEnabled, setNotifyEnabled] = useState<boolean>(true);
   const [localAgentEmail, setLocalAgentEmail] = useState<string>('');
   const [selectedRequest, setSelectedRequest] = useState<SupportRequest | null>(null);
+  const [historyPage, setHistoryPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
 
   // Poll for pending tickets and show desktop notifications (agents only)
   usePendingNotifications({ pollIntervalMs: 30000, apiUrl: '/api/requests', reminderIntervalMs: 5 * 60 * 1000, currentUserId });
@@ -569,41 +571,79 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                   </tr>
                 </thead>
               <tbody className="divide-y divide-gray-50">
-                {completed.map(req => (
-                  <tr key={req.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="p-4 font-black text-gray-900">{req.id}</td>
-                    <td className="p-4 font-black text-gray-900">{req.userName}</td>
-                    <td className="p-4 font-bold text-gray-600">
-                      <div className="relative group max-w-[28rem]">
-                        <span onClick={() => setSelectedRequest(req)} role="button" tabIndex={0} className="block truncate cursor-pointer hover:underline">{req.subject}</span>
-                        <div className="hidden group-hover:block absolute left-0 top-full mt-2 z-50 w-[min(60vw,40rem)] max-h-[35vh] overflow-auto bg-white p-3 rounded-lg shadow-lg border border-gray-100 text-sm text-gray-700 whitespace-pre-wrap">
-                          {(req.description && req.description.length > 0) ? `${req.subject} — ${req.description}` : req.subject}
+                {(() => {
+                  const startIdx = (historyPage - 1) * ITEMS_PER_PAGE;
+                  const endIdx = startIdx + ITEMS_PER_PAGE;
+                  return completed.slice(startIdx, endIdx).map(req => (
+                    <tr key={req.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="p-4 font-black text-gray-900">{req.id}</td>
+                      <td className="p-4 font-black text-gray-900">{req.userName}</td>
+                      <td className="p-4 font-bold text-gray-600">
+                        <div className="relative group max-w-[28rem]">
+                          <span onClick={() => setSelectedRequest(req)} role="button" tabIndex={0} className="block truncate cursor-pointer hover:underline">{req.subject}</span>
+                          <div className="hidden group-hover:block absolute left-0 top-full mt-2 z-50 w-[min(60vw,40rem)] max-h-[35vh] overflow-auto bg-white p-3 rounded-lg shadow-lg border border-gray-100 text-sm text-gray-700 whitespace-pre-wrap">
+                            {(req.description && req.description.length > 0) ? `${req.subject} — ${req.description}` : req.subject}
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="p-4 font-black text-indigo-600">{req.agentName || '-'}</td>
-                    <td className="p-4 text-gray-500">{req.createdAt ? new Date(Number(req.createdAt)).toLocaleString('es-ES', {
-                      day: '2-digit', month: '2-digit', year: 'numeric',
-                      hour: '2-digit', minute: '2-digit'
-                    }) : '-'}</td>
-                    <td className="p-4 text-gray-400">
-                      {req.completedAt ? new Date(Number(req.completedAt)).toLocaleString('es-ES', { 
+                      </td>
+                      <td className="p-4 font-black text-indigo-600">{req.agentName || '-'}</td>
+                      <td className="p-4 text-gray-500">{req.createdAt ? new Date(Number(req.createdAt)).toLocaleString('es-ES', {
                         day: '2-digit', month: '2-digit', year: 'numeric',
                         hour: '2-digit', minute: '2-digit'
-                      }) : '-'}
-                    </td>
-                    <td className="p-4">
-                      <span className={`text-[8px] font-black px-2 py-1 rounded uppercase ${req.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                        {statusLabel(req.status).toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="p-4 w-36">
-                      <button onClick={() => onUpdateStatus(req.id, 'waiting')} className="bg-indigo-50 text-indigo-600 text-[9px] font-black px-3 py-2 rounded-xl flex items-center space-x-2"><RotateCcw size={14}/><span>REABRIR</span></button>
-                    </td>
-                  </tr>
-                ))}
+                      }) : '-'}</td>
+                      <td className="p-4 text-gray-400">
+                        {req.completedAt ? new Date(Number(req.completedAt)).toLocaleString('es-ES', { 
+                          day: '2-digit', month: '2-digit', year: 'numeric',
+                          hour: '2-digit', minute: '2-digit'
+                        }) : '-'}
+                      </td>
+                      <td className="p-4">
+                        <span className={`text-[8px] font-black px-2 py-1 rounded uppercase ${req.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                          {statusLabel(req.status).toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="p-4 w-36">
+                        <button onClick={() => onUpdateStatus(req.id, 'waiting')} className="bg-indigo-50 text-indigo-600 text-[9px] font-black px-3 py-2 rounded-xl flex items-center space-x-2"><RotateCcw size={14}/><span>REABRIR</span></button>
+                      </td>
+                    </tr>
+                  ));
+                })()}
               </tbody>
            </table>
+
+           {/* Pagination Controls */}
+           <div className="bg-gray-50 border-t border-gray-100 p-4 flex items-center justify-between">
+             <div className="text-xs text-gray-600 font-bold">
+               Total: <span className="font-black text-gray-900">{completed.length}</span> tickets | Página <span className="font-black text-indigo-600">{historyPage}</span> de <span className="font-black text-indigo-600">{Math.ceil(completed.length / ITEMS_PER_PAGE) || 1}</span>
+             </div>
+             <div className="flex items-center space-x-2">
+               <button 
+                 onClick={() => setHistoryPage(prev => Math.max(1, prev - 1))}
+                 disabled={historyPage === 1}
+                 className="px-4 py-2 rounded-xl font-black text-xs uppercase transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-white border border-gray-200 text-gray-700 hover:enabled:bg-gray-100"
+               >Anterior</button>
+               
+               <div className="flex items-center space-x-1">
+                 {Array.from({ length: Math.ceil(completed.length / ITEMS_PER_PAGE) || 1 }).map((_, idx) => {
+                   const pageNum = idx + 1;
+                   const isActive = pageNum === historyPage;
+                   return (
+                     <button
+                       key={pageNum}
+                       onClick={() => setHistoryPage(pageNum)}
+                       className={`w-8 h-8 rounded-lg font-black text-xs transition-all ${isActive ? 'bg-indigo-600 text-white' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                     >{pageNum}</button>
+                   );
+                 })}
+               </div>
+
+               <button 
+                 onClick={() => setHistoryPage(prev => Math.min(Math.ceil(completed.length / ITEMS_PER_PAGE) || 1, prev + 1))}
+                 disabled={historyPage >= Math.ceil(completed.length / ITEMS_PER_PAGE) || completed.length === 0}
+                 className="px-4 py-2 rounded-xl font-black text-xs uppercase transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-white border border-gray-200 text-gray-700 hover:enabled:bg-gray-100"
+               >Siguiente</button>
+             </div>
+           </div>
         </div>
       )}
     </div>
