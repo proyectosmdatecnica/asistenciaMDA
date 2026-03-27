@@ -14,9 +14,10 @@ interface AgentDashboardProps {
   onManageAgent: (action: 'add' | 'remove', email: string) => void;
   onRefreshAgents?: () => Promise<void>;
   currentUserId?: string;
+  onCreateTicket?: (request: Partial<SupportRequest>) => void;
 }
 
-const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpdateStatus, agents, onManageAgent, onRefreshAgents, currentUserId }) => {
+const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpdateStatus, agents, onManageAgent, onRefreshAgents, currentUserId, onCreateTicket }) => {
   const [now, setNow] = useState(Date.now());
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'queue' | 'history' | 'settings'>('queue');
@@ -667,10 +668,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
 
           <form onSubmit={async (e) => {
             e.preventDefault();
-            if (!ticketSubject.trim()) return;
+            if (!ticketSubject.trim() || !onCreateTicket) return;
             setIsCreatingTicket(true);
             try {
-              await onSubmit({ subject: ticketSubject, description: ticketDescription, priority: ticketPriority });
+              await onCreateTicket({ subject: ticketSubject, description: ticketDescription, priority: ticketPriority });
               setTicketSubject('');
               setTicketDescription('');
               setTicketPriority('medium');

@@ -299,6 +299,7 @@ const App: React.FC = () => {
             onManageAgent={handleAgentManagement}
             onRefreshAgents={refreshData}
             currentUserId={currentUserId}
+            onCreateTicket={handleCreateOrUpdate}
           />
         ) : (
           <UserRequestView 
