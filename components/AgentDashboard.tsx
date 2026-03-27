@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { SupportRequest, QueueStats } from '../types';
 import { 
-  Clock, CheckCircle, Search, Zap, List, LayoutGrid, Settings, Plus, Trash2, Activity, MessageCircle, RotateCcw, XCircle, Pause, Play
+  Clock, CheckCircle, Search, Zap, List, LayoutGrid, Settings, Plus, Trash2, Activity, MessageCircle, RotateCcw, XCircle, Pause, Play, X, Send, Loader2
 } from 'lucide-react';
 import usePendingNotifications from '../hooks/usePendingNotifications';
 import { storageService } from '../services/dataService';
@@ -27,6 +27,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
   const [localAgentEmail, setLocalAgentEmail] = useState<string>('');
   const [selectedRequest, setSelectedRequest] = useState<SupportRequest | null>(null);
   const [historyPage, setHistoryPage] = useState(1);
+  const [showCreateTicket, setShowCreateTicket] = useState(false);
+  const [ticketSubject, setTicketSubject] = useState('');
+  const [ticketDescription, setTicketDescription] = useState('');
+  const [ticketPriority, setTicketPriority] = useState<SupportRequest['priority']>('medium');
+  const [isCreatingTicket, setIsCreatingTicket] = useState(false);
   const ITEMS_PER_PAGE = 20;
 
   // Poll for pending tickets and show desktop notifications (agents only)
@@ -253,6 +258,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
             <input type="text" placeholder="Filtrar..." className="bg-transparent border-none outline-none text-xs font-bold w-full" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
           <div className="ml-3 flex items-center space-x-2">
+            <button onClick={() => setShowCreateTicket(true)} title="Crear Ticket Personal" className="p-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all"><Plus size={16} /></button>
             <button onClick={() => setViewMode('grid')} title="Vista en grilla" className={`p-2 rounded-xl ${viewMode === 'grid' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-400 hover:bg-gray-100'}`}><LayoutGrid size={16} /></button>
             <button onClick={() => setViewMode('standard')} title="Vista en tarjetas" className={`p-2 rounded-xl ${viewMode === 'standard' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-400 hover:bg-gray-100'}`}><List size={16} /></button>
           </div>
@@ -648,6 +654,96 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
       )}
     </div>
     {renderDetailModal()}
+
+    {/* Modal Crear Ticket Personal */}
+    {showCreateTicket && (
+      <div className="fixed inset-0 z-60 flex items-center justify-center">
+        <div onClick={() => setShowCreateTicket(false)} className="absolute inset-0 bg-black/40" />
+        <div className="relative z-70 w-[min(95vw,700px)] max-h-[90vh] overflow-auto bg-white rounded-3xl shadow-2xl border border-gray-100 p-8">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-black text-gray-900">Crear Ticket Personal</h3>
+            <button onClick={() => setShowCreateTicket(false)} className="text-gray-400 hover:text-gray-700"><X size={20} /></button>
+          </div>
+
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            if (!ticketSubject.trim()) return;
+            setIsCreatingTicket(true);
+            try {
+              await onSubmit({ subject: ticketSubject, description: ticketDescription, priority: ticketPriority });
+              setTicketSubject('');
+              setTicketDescription('');
+              setTicketPriority('medium');
+              setShowCreateTicket(false);
+            } finally {
+              setIsCreatingTicket(false);
+            }
+          }} className="space-y-5">
+            <div>
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Asunto</label>
+              <input 
+                type="text" 
+                value={ticketSubject} 
+                onChange={e => setTicketSubject(e.target.value)}
+                placeholder="Ej: Laptop no prende"
+                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 focus:border-indigo-600 rounded-2xl font-bold text-sm outline-none"
+                required 
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Descripción</label>
+              <textarea 
+                value={ticketDescription} 
+                onChange={e => setTicketDescription(e.target.value)}
+                placeholder="Detalles del problema..."
+                rows={4}
+                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 focus:border-indigo-600 rounded-2xl font-bold text-sm outline-none resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Prioridad</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { value: 'low' as const, label: 'Baja', color: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
+                  { value: 'medium' as const, label: 'Media', color: 'bg-blue-50 text-blue-600 border-blue-200' },
+                  { value: 'high' as const, label: 'Alta', color: 'bg-amber-50 text-amber-600 border-amber-200' },
+                  { value: 'urgent' as const, label: 'Urgente', color: 'bg-red-50 text-red-600 border-red-200' }
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setTicketPriority(opt.value)}
+                    className={`py-2 px-3 rounded-xl border-2 font-black text-xs transition-all ${
+                      ticketPriority === opt.value 
+                        ? opt.color + ' shadow-md' 
+                        : 'bg-gray-50 text-gray-400 border-gray-200'
+                    }`}
+                  >{opt.label}</button>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-4 flex items-center space-x-3">
+              <button 
+                type="submit"
+                disabled={isCreatingTicket || !ticketSubject.trim()}
+                className="flex-1 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center space-x-2 hover:enabled:bg-indigo-700 disabled:opacity-50"
+              >
+                {isCreatingTicket ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                <span>{isCreatingTicket ? 'Creando...' : 'Crear Ticket'}</span>
+              </button>
+              <button 
+                type="button"
+                onClick={() => setShowCreateTicket(false)}
+                className="px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest text-gray-600 bg-gray-100 hover:bg-gray-200"
+              >Cancelar</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    )}
     </>
   );
 };
