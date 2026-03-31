@@ -389,12 +389,24 @@ export async function agentsHandler(req: HttpRequest, context: InvocationContext
                 ALTER TABLE authorized_agents ADD notifyReminders BIT DEFAULT 1;
             END
         `);
+        // add showOnUserDashboard column if missing
+        await poolConnection.request().query(`
+            IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'showOnUserDashboard' AND Object_ID = Object_ID(N'authorized_agents'))
+            BEGIN
+                ALTER TABLE authorized_agents ADD showOnUserDashboard BIT DEFAULT 0;
+            END
+        `);
 
         if (method === "get") {
             const pending = req.query.get('pending');
+            const details = req.query.get('details');
             if (pending === '1' || pending === 'true') {
                 const result = await poolConnection.request().query("SELECT email FROM authorized_agents WHERE status = 'pending'");
                 return { status: 200, jsonBody: result.recordset.map(r => r.email) };
+            }
+            if (details === '1' || details === 'true') {
+                const result = await poolConnection.request().query("SELECT email, ISNULL(showOnUserDashboard, 0) AS showOnUserDashboard FROM authorized_agents WHERE status = 'active' ORDER BY email ASC");
+                return { status: 200, jsonBody: result.recordset.map(r => ({ email: r.email, showOnUserDashboard: !!r.showOnUserDashboard })) };
             }
             const result = await poolConnection.request().query("SELECT email FROM authorized_agents WHERE status = 'active'");
             return { status: 200, jsonBody: result.recordset.map(r => r.email) };
@@ -507,6 +519,45 @@ export async function agentsRejectHandler(req: HttpRequest, context: InvocationC
 
 app.http('agentsApprove', { methods: ['POST'], authLevel: 'anonymous', route: 'agents/approve', handler: agentsApproveHandler });
 app.http('agentsReject', { methods: ['POST'], authLevel: 'anonymous', route: 'agents/reject', handler: agentsRejectHandler });
+
+// Agent visibility in user dashboard
+export async function agentsVisibilityHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    try {
+        if (req.method.toLowerCase() !== 'post') return { status: 405, body: 'Not Allowed' };
+        const poolConnection = await getPool(context);
+        await poolConnection.request().query(`
+            IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'showOnUserDashboard' AND Object_ID = Object_ID(N'authorized_agents'))
+            BEGIN
+                ALTER TABLE authorized_agents ADD showOnUserDashboard BIT DEFAULT 0;
+            END
+        `);
+        let body: any;
+        try { body = await req.json(); } catch (e) { return { status: 400, body: 'JSON malformado' }; }
+
+        const email = body?.email?.toLowerCase();
+        if (!email) return { status: 400, body: 'Email requerido' };
+        const showOnUserDashboard = body?.showOnUserDashboard === true ? 1 : 0;
+
+        const result = await poolConnection.request()
+            .input('email', sql.VarChar, email)
+            .input('show', sql.Bit, showOnUserDashboard)
+            .query(`
+                UPDATE authorized_agents
+                SET showOnUserDashboard = @show
+                WHERE email = @email AND status = 'active';
+                SELECT @@ROWCOUNT as updated;
+            `);
+
+        const updated = result.recordset && result.recordset[0] && (result.recordset[0].updated || result.recordset[0].UPDATED || 0);
+        if (updated && updated > 0) return { status: 200, jsonBody: { success: true } };
+        return { status: 404, jsonBody: { error: 'Agente activo no encontrado' } };
+    } catch (err:any) {
+        context.error('agentsVisibilityHandler error', err.message);
+        return { status: 500, jsonBody: { error: err.message } };
+    }
+}
+
+app.http('agentsVisibility', { methods: ['POST'], authLevel: 'anonymous', route: 'agents/visibility', handler: agentsVisibilityHandler });
 
 // Agent settings: GET ?email=...  POST { email, notifyReminders }
 export async function agentsSettingsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {

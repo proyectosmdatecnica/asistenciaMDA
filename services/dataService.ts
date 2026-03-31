@@ -1,5 +1,5 @@
 
-import { SupportRequest } from '../types';
+import { AuthorizedAgent, SupportRequest } from '../types';
 
 const isLocal = typeof window !== 'undefined' && window.location && window.location.hostname === 'localhost';
 const API_ENDPOINT = isLocal ? `${window.location.protocol}//${window.location.hostname}:7071/api/requests` : '/api/requests';
@@ -50,6 +50,22 @@ export const storageService = {
     }
     const data = await response.json();
     return Array.isArray(data) ? data : [];
+  },
+
+  async fetchAgentDetails(): Promise<AuthorizedAgent[]> {
+    const response = await fetch(`${AGENTS_ENDPOINT}?details=1`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Error ${response.status} consultando detalle de agentes: ${errorText || response.statusText}`);
+    }
+    const data = await response.json();
+    if (!Array.isArray(data)) return [];
+    return data
+      .filter((a) => a && typeof a.email === 'string')
+      .map((a) => ({
+        email: String(a.email).toLowerCase(),
+        showOnUserDashboard: !!a.showOnUserDashboard
+      }));
   },
 
   async fetchPendingAgents(): Promise<string[]> {
@@ -105,6 +121,20 @@ export const storageService = {
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Error ${response.status} rechazando agente: ${errorText || response.statusText}`);
+    }
+    return response.ok;
+  },
+
+  async setAgentDashboardVisibility(email: string, showOnUserDashboard: boolean): Promise<boolean> {
+    const url = `${AGENTS_ENDPOINT}/visibility`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, showOnUserDashboard })
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Error ${response.status} actualizando visibilidad: ${errorText || response.statusText}`);
     }
     return response.ok;
   },
