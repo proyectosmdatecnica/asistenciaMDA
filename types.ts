@@ -26,4 +26,9 @@ export interface QueueStats {
   completedToday: number;
 }
 
+export interface AuthorizedAgent {
+  email: string;
+  showOnUserDashboard: boolean;
+}
+
 export type AppRole = 'user' | 'agent';

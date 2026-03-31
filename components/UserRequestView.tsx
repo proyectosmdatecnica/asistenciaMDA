@@ -6,6 +6,7 @@ interface UserRequestViewProps {
   activeRequests: SupportRequest[];
   queuePosition: (id: string) => number;
   averageWaitTime: number;
+  visibleAgents: Array<{ name: string; email: string }>;
   onSubmit: (request: Partial<SupportRequest>, id?: string) => void;
   onCancel: (id: string) => void;
 }
@@ -17,7 +18,7 @@ const IT_TIPS = [
   "Si algo no carga, prueba borrar el caché."
 ];
 
-const UserRequestView: React.FC<UserRequestViewProps> = ({ activeRequests, queuePosition, averageWaitTime, onSubmit, onCancel }) => {
+const UserRequestView: React.FC<UserRequestViewProps> = ({ activeRequests, queuePosition, averageWaitTime, visibleAgents, onSubmit, onCancel }) => {
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<SupportRequest['priority']>('medium');
@@ -207,6 +208,21 @@ const UserRequestView: React.FC<UserRequestViewProps> = ({ activeRequests, queue
           )}
         </div>
         <div className="md:col-span-4 space-y-6">
+          <div className="bg-white p-6 rounded-3xl border border-gray-100">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Agentes Activos</p>
+            {visibleAgents.length === 0 ? (
+              <p className="text-xs text-gray-500">No hay agentes activos configurados.</p>
+            ) : (
+              <ul className="space-y-2">
+                {visibleAgents.map((agent) => (
+                  <li key={agent.email} className="text-xs text-gray-700">
+                    <span className="font-black">{agent.name}</span>
+                    <span className="text-gray-500"> ({agent.email})</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           <div className="bg-indigo-50 p-6 rounded-3xl border border-indigo-100"><p className="text-[9px] font-black text-indigo-400 uppercase mb-2">IT Tip</p><p className="text-xs text-indigo-900 italic">"{IT_TIPS[currentTip]}"</p></div>
           <div className="bg-white p-6 rounded-3xl border border-gray-100 text-center"><p className="text-3xl font-black text-gray-900">{averageWaitTime}<span className="text-xs font-bold text-gray-400 ml-1">min</span></p><p className="text-[10px] text-gray-400 font-black uppercase mt-1">Espera promedio</p></div>
         </div>

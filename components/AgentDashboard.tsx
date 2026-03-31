@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { SupportRequest, QueueStats } from '../types';
+import { SupportRequest, QueueStats, AuthorizedAgent } from '../types';
 import { 
   Clock, CheckCircle, Search, Zap, List, LayoutGrid, Settings, Plus, Trash2, Activity, MessageCircle, RotateCcw, XCircle, Pause, Play, X, Send, Loader2
 } from 'lucide-react';
@@ -11,13 +11,15 @@ interface AgentDashboardProps {
   stats: QueueStats;
   onUpdateStatus: (id: string, newStatus: SupportRequest['status']) => void;
   agents: string[];
+  agentDetails: AuthorizedAgent[];
   onManageAgent: (action: 'add' | 'remove', email: string) => void;
+  onToggleAgentVisibility: (email: string, showOnUserDashboard: boolean) => void | Promise<void>;
   onRefreshAgents?: () => Promise<void>;
   currentUserId?: string;
   onCreateTicket?: (request: Partial<SupportRequest>) => void;
 }
 
-const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpdateStatus, agents, onManageAgent, onRefreshAgents, currentUserId, onCreateTicket }) => {
+const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpdateStatus, agents, agentDetails, onManageAgent, onToggleAgentVisibility, onRefreshAgents, currentUserId, onCreateTicket }) => {
   const [now, setNow] = useState(Date.now());
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'queue' | 'history' | 'settings'>('queue');
@@ -510,7 +512,27 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
 
             <div className="space-y-3">
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2 mb-2">Agentes Autorizados</p>
-              {agents.map(email => (
+              {agentDetails.map((agent) => (
+                <div key={agent.email} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 group">
+                  <div className="flex items-center space-x-3 flex-1 min-w-0">
+                    <div className="w-8 h-8 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center font-black text-xs">@</div>
+                    <span className="text-sm font-bold text-gray-700 truncate">{agent.email}</span>
+                  </div>
+                  <label className="flex items-center space-x-2 mr-3 text-[11px] font-bold text-gray-600">
+                    <input
+                      type="checkbox"
+                      checked={agent.showOnUserDashboard}
+                      onChange={(e) => onToggleAgentVisibility(agent.email, e.target.checked)}
+                      className="accent-indigo-600"
+                    />
+                    <span>Mostrar en dashboard usuario</span>
+                  </label>
+                  <button onClick={() => onManageAgent('remove', agent.email)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all p-2">
+                    <Trash2 size={16}/>
+                  </button>
+                </div>
+              ))}
+              {agentDetails.length === 0 && agents.map((email) => (
                 <div key={email} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 group">
                   <div className="flex items-center space-x-3">
                     <div className="w-8 h-8 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center font-black text-xs">@</div>

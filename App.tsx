@@ -3,7 +3,7 @@ import Layout from './components/Layout';
 import AgentDashboard from './components/AgentDashboard';
 import UserRequestView from './components/UserRequestView';
 import HelpModal from './components/HelpModal';
-import { SupportRequest, QueueStats, AppRole } from './types';
+import { SupportRequest, QueueStats, AppRole, AuthorizedAgent } from './types';
 import { storageService } from './services/dataService';
 import { Loader2, RefreshCw, Wifi, WifiOff, Activity } from 'lucide-react';
 
@@ -11,6 +11,7 @@ const App: React.FC = () => {
   const [role, setRole] = useState<AppRole>('user');
   const [requests, setRequests] = useState<SupportRequest[]>([]);
   const [authorizedAgents, setAuthorizedAgents] = useState<string[]>([]);
+  const [authorizedAgentDetails, setAuthorizedAgentDetails] = useState<AuthorizedAgent[]>([]);
   const [currentUserId, setCurrentUserId] = useState('user-guest');
   const [currentUserName, setCurrentUserName] = useState('Usuario Invitado');
   const [isTeamsReady, setIsTeamsReady] = useState(false);
@@ -31,12 +32,19 @@ const App: React.FC = () => {
         storageService.fetchAllRequests(),
         storageService.fetchAgents()
       ]);
+      let agentDetails: AuthorizedAgent[] = [];
+      try {
+        agentDetails = await storageService.fetchAgentDetails();
+      } catch (e) {
+        agentDetails = [];
+      }
       
       // include any local fallback agent stored in localStorage
       const localAgent = (localStorage.getItem('localAgentEmail') || '').toLowerCase();
       const mergedAgents = Array.isArray(agents) ? [...agents.map((a:any) => String(a).toLowerCase())] : [];
       if (localAgent && !mergedAgents.includes(localAgent)) mergedAgents.push(localAgent);
       setAuthorizedAgents(mergedAgents);
+      setAuthorizedAgentDetails(agentDetails);
       console.debug('[app] fetched authorizedAgents:', agents);
       console.debug('[app] currentUserId in refreshData:', currentUserId);
       setRequests(data);
@@ -220,6 +228,13 @@ const App: React.FC = () => {
     setIsSyncing(false);
   };
 
+  const handleToggleAgentVisibility = async (email: string, showOnUserDashboard: boolean) => {
+    setIsSyncing(true);
+    await storageService.setAgentDashboardVisibility(email, showOnUserDashboard);
+    await refreshData(true);
+    setIsSyncing(false);
+  };
+
   const handleAgentRegistered = async (email: string) => {
     // Add agent on server and switch UI role locally
     setIsSyncing(true);
@@ -248,6 +263,33 @@ const App: React.FC = () => {
   const activeRequestsForUser = useMemo(() => 
     requests.filter(r => r.userId === currentUserId && r.status !== 'completed' && r.status !== 'cancelled')
   , [requests, currentUserId]);
+
+  const agentNameByEmail = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of requests) {
+      if (r.agentId && r.agentName) {
+        map.set(String(r.agentId).toLowerCase(), r.agentName);
+      }
+    }
+    return map;
+  }, [requests]);
+
+  const visibleAgentsForUser = useMemo(() => {
+    const toName = (email: string) => {
+      const found = agentNameByEmail.get(email.toLowerCase());
+      if (found) return found;
+      const localPart = email.split('@')[0] || email;
+      return localPart
+        .split(/[._-]+/)
+        .filter(Boolean)
+        .map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+        .join(' ');
+    };
+
+    return authorizedAgentDetails
+      .filter(a => a.showOnUserDashboard)
+      .map(a => ({ name: toName(a.email), email: a.email }));
+  }, [authorizedAgentDetails, agentNameByEmail]);
 
   if (!isTeamsReady) return <div className="h-screen w-full flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-[#5b5fc7]" size={40} /></div>;
 
@@ -296,7 +338,9 @@ const App: React.FC = () => {
             stats={stats} 
             onUpdateStatus={handleUpdateStatus}
             agents={authorizedAgents}
+            agentDetails={authorizedAgentDetails}
             onManageAgent={handleAgentManagement}
+            onToggleAgentVisibility={handleToggleAgentVisibility}
             onRefreshAgents={refreshData}
             currentUserId={currentUserId}
             onCreateTicket={handleCreateOrUpdate}
@@ -306,6 +350,7 @@ const App: React.FC = () => {
             activeRequests={activeRequestsForUser}
             queuePosition={(id) => requests.filter(r => r.status === 'waiting').sort((a,b) => Number(a.createdAt)-Number(b.createdAt)).findIndex(r => r.id === id) + 1}
             averageWaitTime={stats.averageWaitTime}
+            visibleAgents={visibleAgentsForUser}
             onSubmit={handleCreateOrUpdate}
             onCancel={(id) => handleUpdateStatus(id, 'cancelled')}
           />
