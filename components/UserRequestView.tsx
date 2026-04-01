@@ -7,6 +7,7 @@ interface UserRequestViewProps {
   queuePosition: (id: string) => number;
   averageWaitTime: number;
   visibleAgents: Array<{ name: string; email: string }>;
+  inProgressTickets: Array<{ id: string; subject?: string; agentName?: string }>;
   onSubmit: (request: Partial<SupportRequest>, id?: string) => void;
   onCancel: (id: string) => void;
 }
@@ -18,7 +19,7 @@ const IT_TIPS = [
   "Si algo no carga, prueba borrar el caché."
 ];
 
-const UserRequestView: React.FC<UserRequestViewProps> = ({ activeRequests, queuePosition, averageWaitTime, visibleAgents, onSubmit, onCancel }) => {
+const UserRequestView: React.FC<UserRequestViewProps> = ({ activeRequests, queuePosition, averageWaitTime, visibleAgents, inProgressTickets, onSubmit, onCancel }) => {
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<SupportRequest['priority']>('medium');
@@ -208,6 +209,28 @@ const UserRequestView: React.FC<UserRequestViewProps> = ({ activeRequests, queue
           )}
         </div>
         <div className="md:col-span-4 space-y-6">
+          <div className="bg-white p-6 rounded-3xl border border-gray-100">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Tickets en Atención</p>
+            {inProgressTickets.length === 0 ? (
+              <p className="text-xs text-gray-500">No hay tickets en atención en este momento.</p>
+            ) : inProgressTickets.length === 1 ? (
+              <p className="text-xs text-gray-700">
+                Ticket en atención actualmente <span className="font-black">{inProgressTickets[0].id}</span>
+              </p>
+            ) : (
+              <div>
+                <p className="text-xs text-gray-700 mb-2">Tickets en atención actualmente:</p>
+                <ul className="space-y-2">
+                  {inProgressTickets.map((ticket) => (
+                    <li key={ticket.id} className="text-xs text-gray-700">
+                      <span className="font-black">{ticket.id}</span>
+                      {ticket.agentName ? <span className="text-gray-500"> ({ticket.agentName})</span> : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
           <div className="bg-white p-6 rounded-3xl border border-gray-100">
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Agentes Activos</p>
             {visibleAgents.length === 0 ? (
