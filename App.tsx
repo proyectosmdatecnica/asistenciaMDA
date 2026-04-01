@@ -291,6 +291,17 @@ const App: React.FC = () => {
       .map(a => ({ name: toName(a.email), email: a.email }));
   }, [authorizedAgentDetails, agentNameByEmail]);
 
+  const inProgressTickets = useMemo(() => {
+    return requests
+      .filter(r => r.status === 'in-progress')
+      .sort((a, b) => {
+        const ta = Number(a.startedAt || a.createdAt || 0);
+        const tb = Number(b.startedAt || b.createdAt || 0);
+        return ta - tb;
+      })
+      .map(r => ({ id: r.id, subject: r.subject, agentName: r.agentName }));
+  }, [requests]);
+
   if (!isTeamsReady) return <div className="h-screen w-full flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-[#5b5fc7]" size={40} /></div>;
 
   return (
@@ -351,6 +362,7 @@ const App: React.FC = () => {
             queuePosition={(id) => requests.filter(r => r.status === 'waiting').sort((a,b) => Number(a.createdAt)-Number(b.createdAt)).findIndex(r => r.id === id) + 1}
             averageWaitTime={stats.averageWaitTime}
             visibleAgents={visibleAgentsForUser}
+            inProgressTickets={inProgressTickets}
             onSubmit={handleCreateOrUpdate}
             onCancel={(id) => handleUpdateStatus(id, 'cancelled')}
           />
