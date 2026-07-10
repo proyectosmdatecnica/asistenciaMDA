@@ -161,6 +161,12 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                 ALTER TABLE requests ADD pausedAccum BIGINT DEFAULT 0;
             END
         `);
+        await poolConnection.request().query(`
+            IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'closeComment' AND Object_ID = Object_ID(N'requests'))
+            BEGIN
+                ALTER TABLE requests ADD closeComment NVARCHAR(MAX) NULL;
+            END
+        `);
         // Ensure notifications_log table exists for storing Graph errors
         await poolConnection.request().query(`
             IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='notifications_log' AND xtype='U')
@@ -374,18 +380,21 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                         `);
                 } else {
                     // other transitions (waiting, completed, cancelled)
+                    const closeComment = typeof body.closeComment === 'string' ? body.closeComment.trim() : '';
                     await poolConnection.request()
                         .input('id', sql.VarChar, id)
                         .input('status', sql.VarChar, status)
                         .input('agentId', sql.VarChar, body.agentId || null)
                         .input('agentName', sql.VarChar, body.agentName || null)
                         .input('now', sql.BigInt, now)
+                        .input('closeComment', sql.NVarChar, closeComment || null)
                         .query(`UPDATE requests SET 
                                 status = @status, 
                                 agentId = CASE WHEN @status = 'in-progress' THEN @agentId WHEN @status = 'waiting' THEN NULL ELSE agentId END,
                                 agentName = CASE WHEN @status = 'in-progress' THEN @agentName WHEN @status = 'waiting' THEN NULL ELSE agentName END,
                                 startedAt = CASE WHEN @status = 'in-progress' AND startedAt IS NULL THEN @now WHEN @status = 'waiting' THEN NULL ELSE startedAt END, 
-                                completedAt = CASE WHEN @status IN ('completed', 'cancelled') THEN @now WHEN @status IN ('waiting', 'in-progress') THEN NULL ELSE completedAt END 
+                                completedAt = CASE WHEN @status IN ('completed', 'cancelled') THEN @now WHEN @status IN ('waiting', 'in-progress') THEN NULL ELSE completedAt END,
+                                closeComment = CASE WHEN @status IN ('completed', 'cancelled') THEN @closeComment WHEN @status IN ('waiting', 'in-progress') THEN NULL ELSE closeComment END
                                 WHERE id = @id`);
 
                     // If transitioning to waiting, notify active agents

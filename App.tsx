@@ -47,10 +47,7 @@ const App: React.FC = () => {
         agentDetails = [];
       }
       
-      // include any local fallback agent stored in localStorage
-      const localAgent = (localStorage.getItem('localAgentEmail') || '').toLowerCase();
       const mergedAgents = Array.isArray(agents) ? [...agents.map((a:any) => String(a).toLowerCase())] : [];
-      if (localAgent && !mergedAgents.includes(localAgent)) mergedAgents.push(localAgent);
       setAuthorizedAgents(mergedAgents);
       setAuthorizedAgentDetails(agentDetails);
       console.debug('[app] fetched authorizedAgents:', agents);
@@ -199,8 +196,7 @@ const App: React.FC = () => {
   // Ensure role is recalculated whenever current user or authorized agents list changes
   useEffect(() => {
     const normalized = currentUserId.toLowerCase();
-    const localAgentEmail = (localStorage.getItem('localAgentEmail') || '').toLowerCase();
-    const isAgent = authorizedAgents.some((a)=> a.toLowerCase() === normalized || a.toLowerCase() === localAgentEmail);
+    const isAgent = authorizedAgents.some((a)=> a.toLowerCase() === normalized);
     setRole(isAgent ? 'agent' : 'user');
   }, [authorizedAgents, currentUserId]);
 
@@ -256,10 +252,10 @@ const App: React.FC = () => {
     setIsSyncing(false);
   }, [currentUserId, currentUserName, refreshData]);
 
-  const handleUpdateStatus = useCallback(async (id: string, newStatus: SupportRequest['status']) => {
+  const handleUpdateStatus = useCallback(async (id: string, newStatus: SupportRequest['status'], extraData: Partial<SupportRequest> = {}) => {
     setIsSyncing(true);
     const agentData = (newStatus === 'in-progress' || newStatus === 'paused') ? { agentId: currentUserId, agentName: currentUserName } : {};
-    if (await storageService.updateRequestStatus(id, newStatus, agentData)) refreshData(true);
+    if (await storageService.updateRequestStatus(id, newStatus, { ...agentData, ...extraData })) refreshData(true);
     setIsSyncing(false);
   }, [currentUserId, currentUserName, refreshData]);
 
