@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { SupportRequest, QueueStats, AuthorizedAgent } from '../types';
 import { 
-  Clock, CheckCircle, Search, Zap, List, LayoutGrid, Settings, Plus, Trash2, Activity, MessageCircle, RotateCcw, XCircle, Pause, Play, X, Send, Loader2
+  Clock, CheckCircle, Search, Zap, List, LayoutGrid, Settings, Plus, Trash2, Activity, MessageCircle, RotateCcw, XCircle, Pause, Play, X, Send, Loader2, Eye
 } from 'lucide-react';
 import usePendingNotifications from '../hooks/usePendingNotifications';
 import { storageService } from '../services/dataService';
@@ -391,17 +391,44 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
               <button onClick={() => setSelectedRequest(null)} className="text-gray-400 hover:text-gray-700">Cerrar</button>
             </div>
           </div>
-          <div className="prose max-w-none text-sm text-gray-700 whitespace-pre-wrap mb-4">{selectedRequest.description || 'Sin descripción adicional.'}</div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
+            <div className="bg-gray-50 border border-gray-100 rounded-xl p-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Usuario</p>
+              <p className="text-sm font-bold text-gray-700 mt-1">{selectedRequest.userName || '-'}</p>
+            </div>
+            <div className="bg-gray-50 border border-gray-100 rounded-xl p-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Agente</p>
+              <p className="text-sm font-bold text-gray-700 mt-1">{selectedRequest.agentName || '-'}</p>
+            </div>
+            <div className="bg-gray-50 border border-gray-100 rounded-xl p-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Creado</p>
+              <p className="text-sm font-bold text-gray-700 mt-1">{selectedRequest.createdAt ? new Date(Number(selectedRequest.createdAt)).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</p>
+            </div>
+            <div className="bg-gray-50 border border-gray-100 rounded-xl p-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Cierre</p>
+              <p className="text-sm font-bold text-gray-700 mt-1">{selectedRequest.completedAt ? new Date(Number(selectedRequest.completedAt)).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</p>
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Descripción</p>
+            <div className="prose max-w-none text-sm text-gray-700 whitespace-pre-wrap bg-white border border-gray-100 rounded-xl p-3">{selectedRequest.description || 'Sin descripción adicional.'}</div>
+          </div>
+
+          {!!selectedRequest.aiSummary && (
+            <div className="mb-4 p-3 rounded-xl border border-gray-100 bg-gray-50">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Resumen IA</p>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">{selectedRequest.aiSummary}</p>
+            </div>
+          )}
+
           {(selectedRequest.status === 'completed' || selectedRequest.status === 'cancelled') && selectedRequest.closeComment && (
             <div className="mb-4 p-3 rounded-xl border border-indigo-100 bg-indigo-50/40">
               <p className="text-[10px] font-black uppercase tracking-widest text-indigo-500 mb-1">Gestión de cierre</p>
               <p className="text-sm text-gray-700 whitespace-pre-wrap">{selectedRequest.closeComment}</p>
             </div>
           )}
-          <div className="flex justify-between items-center text-sm text-gray-500">
-            <div>Creado: {selectedRequest.createdAt ? new Date(Number(selectedRequest.createdAt)).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</div>
-            <div>Agente: {selectedRequest.agentName || '-'}</div>
-          </div>
         </div>
       </div>
     );
@@ -887,12 +914,12 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                   const startIdx = (historyPage - 1) * ITEMS_PER_PAGE;
                   const endIdx = startIdx + ITEMS_PER_PAGE;
                   return historyRows.slice(startIdx, endIdx).map(req => (
-                    <tr key={req.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={req.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => setSelectedRequest(req)}>
                       <td className="p-4 font-black text-gray-900">{req.id}</td>
                       <td className="p-4 font-black text-gray-900">{req.userName}</td>
                       <td className="p-4 font-bold text-gray-600">
                         <div className="relative group max-w-[28rem]">
-                          <span onClick={() => setSelectedRequest(req)} role="button" tabIndex={0} className="block truncate cursor-pointer hover:underline">{req.subject}</span>
+                          <span className="block truncate hover:underline">{req.subject}</span>
                           <div className="hidden group-hover:block absolute left-0 top-full mt-2 z-50 w-[min(60vw,40rem)] max-h-[35vh] overflow-auto bg-white p-3 rounded-lg shadow-lg border border-gray-100 text-sm text-gray-700 whitespace-pre-wrap">
                             {(req.description && req.description.length > 0) ? `${req.subject} — ${req.description}` : req.subject}
                           </div>
@@ -915,8 +942,17 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                           {statusLabel(req.status).toUpperCase()}
                         </span>
                       </td>
-                      <td className="p-4 w-36">
-                        <button onClick={() => onUpdateStatus(req.id, 'waiting')} className="bg-indigo-50 text-indigo-600 text-[9px] font-black px-3 py-2 rounded-xl flex items-center space-x-2"><RotateCcw size={14}/><span>REABRIR</span></button>
+                      <td className="p-4 w-44">
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setSelectedRequest(req); }}
+                            className="bg-gray-100 text-gray-700 text-[9px] font-black px-3 py-2 rounded-xl flex items-center space-x-2"
+                          ><Eye size={14}/><span>VER</span></button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onUpdateStatus(req.id, 'waiting'); }}
+                            className="bg-indigo-50 text-indigo-600 text-[9px] font-black px-3 py-2 rounded-xl flex items-center space-x-2"
+                          ><RotateCcw size={14}/><span>REABRIR</span></button>
+                        </div>
                       </td>
                     </tr>
                   ));
