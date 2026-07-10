@@ -17,9 +17,11 @@ interface AgentDashboardProps {
   onRefreshAgents?: () => Promise<void>;
   currentUserId?: string;
   onCreateTicket?: (request: Partial<SupportRequest>) => void;
+  testingMode?: boolean;
+  onToggleTestingMode?: () => void;
 }
 
-const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpdateStatus, agents, agentDetails, onManageAgent, onToggleAgentVisibility, onRefreshAgents, currentUserId, onCreateTicket }) => {
+const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpdateStatus, agents, agentDetails, onManageAgent, onToggleAgentVisibility, onRefreshAgents, currentUserId, onCreateTicket, testingMode = false, onToggleTestingMode }) => {
   const [now, setNow] = useState(Date.now());
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'queue' | 'history' | 'settings'>('queue');
@@ -261,6 +263,13 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
             <input type="text" placeholder="Filtrar..." className="bg-transparent border-none outline-none text-xs font-bold w-full" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
           <div className="ml-3 flex items-center space-x-2">
+            <button
+              onClick={() => onToggleTestingMode && onToggleTestingMode()}
+              title="Activar/Desactivar Modo Testing (visual)"
+              className={`p-2 rounded-xl transition-all ${testingMode ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+            >
+              <span className="text-[10px] font-black uppercase tracking-wider">QA</span>
+            </button>
             <button onClick={() => setShowCreateTicket(true)} title="Crear Ticket Personal" className="p-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all"><Plus size={16} /></button>
             <button onClick={() => setViewMode('grid')} title="Vista en grilla" className={`p-2 rounded-xl ${viewMode === 'grid' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-400 hover:bg-gray-100'}`}><LayoutGrid size={16} /></button>
             <button onClick={() => setViewMode('standard')} title="Vista en tarjetas" className={`p-2 rounded-xl ${viewMode === 'standard' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-400 hover:bg-gray-100'}`}><List size={16} /></button>

@@ -33,7 +33,18 @@ export default function usePendingNotifications(opts: Options = {}) {
     async function check() {
       console.debug('[notify] checking pending tickets...');
       try {
-        const resp = await fetch(apiUrl, { cache: 'no-store' });
+        const appMode = (() => {
+          try {
+            const v = (localStorage.getItem('appMode') || '').toLowerCase();
+            return v === 'qa' ? 'qa' : 'prod';
+          } catch (e) {
+            return 'prod';
+          }
+        })();
+        const resp = await fetch(apiUrl, {
+          cache: 'no-store',
+          headers: { 'x-app-mode': appMode }
+        });
         if (!resp.ok) {
           console.debug('[notify] fetch failed', resp.status, resp.statusText);
           return;

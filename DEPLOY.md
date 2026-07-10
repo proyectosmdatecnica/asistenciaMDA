@@ -67,6 +67,7 @@ jobs:
 
 - En el portal de Azure (Static Web App) ve a **Configuration** y añade las variables necesarias, por ejemplo:
 	- `SqlConnectionString` — string de conexión a la base de datos.
+	- `SqlConnectionStringQA` — string de conexión a la base de datos de QA (usada cuando la app está en modo Testing).
 	- `API_KEY` (o `GEMINI_API_KEY`) — key para Google GenAI (unifica el nombre con el usado por `api/index.ts`).
 
 - Para Functions (si gestionas Functions por separado) ve a tu App Function -> Configuration y añade las mismas variables.

@@ -22,6 +22,7 @@ const App: React.FC = () => {
   const [manualEmailRequired, setManualEmailRequired] = useState(false);
   const [manualEmail, setManualEmail] = useState('');
   const [manualEmailError, setManualEmailError] = useState('');
+  const [isTestingMode, setIsTestingMode] = useState(false);
   
   const prevWaitingCount = useRef(0);
 
@@ -152,6 +153,26 @@ const App: React.FC = () => {
       refreshData();
     }
   }, [isTeamsReady, currentUserId, refreshData]);
+
+  useEffect(() => {
+    const key = currentUserId ? `testingMode:${currentUserId}` : 'testingMode';
+    try {
+      const stored = localStorage.getItem(key);
+      setIsTestingMode(stored === 'true');
+    } catch (e) {
+      setIsTestingMode(false);
+    }
+  }, [currentUserId]);
+
+  useEffect(() => {
+    const key = currentUserId ? `testingMode:${currentUserId}` : 'testingMode';
+    try {
+      localStorage.setItem(key, String(isTestingMode));
+      localStorage.setItem('appMode', isTestingMode ? 'qa' : 'prod');
+    } catch (e) {
+      // ignore storage errors
+    }
+  }, [currentUserId, isTestingMode]);
 
   // Ensure role is recalculated whenever current user or authorized agents list changes
   useEffect(() => {
@@ -305,7 +326,7 @@ const App: React.FC = () => {
   if (!isTeamsReady) return <div className="h-screen w-full flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-[#5b5fc7]" size={40} /></div>;
 
   return (
-    <Layout role={role} onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')} onOpenHelp={() => setIsHelpOpen(true)} onAgentRegister={handleAgentRegistered}>
+    <Layout role={role} testingMode={isTestingMode} onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')} onOpenHelp={() => setIsHelpOpen(true)} onAgentRegister={handleAgentRegistered}>
       <div className="relative min-h-full pb-20">
         <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-3 bg-white px-5 py-3 rounded-full shadow-2xl border border-gray-100 text-[11px] font-black group transition-all">
           <div className="relative">
@@ -354,6 +375,8 @@ const App: React.FC = () => {
             onToggleAgentVisibility={handleToggleAgentVisibility}
             onRefreshAgents={refreshData}
             currentUserId={currentUserId}
+            testingMode={isTestingMode}
+            onToggleTestingMode={() => setIsTestingMode(v => !v)}
             onCreateTicket={handleCreateOrUpdate}
           />
         ) : (

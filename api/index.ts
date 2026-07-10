@@ -3,18 +3,43 @@ import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/fu
 import * as sql from "mssql";
 import { GoogleGenAI, Type } from "@google/genai";
 
-const sqlConfigString = process.env.SqlConnectionString;
-let pool: sql.ConnectionPool | null = null;
+type DbMode = 'prod' | 'qa';
 
-async function getPool(context: InvocationContext) {
+const sqlConfigStringProd = process.env.SqlConnectionString;
+const sqlConfigStringQa = process.env.SqlConnectionStringQA || process.env.SqlConnectionString_QA;
+let poolProd: sql.ConnectionPool | null = null;
+let poolQa: sql.ConnectionPool | null = null;
+
+function resolveDbMode(req: HttpRequest): DbMode {
+    const raw = (req.headers.get('x-app-mode') || '').trim().toLowerCase();
+    if (raw === 'qa' || raw === 'test' || raw === 'testing') return 'qa';
+    return 'prod';
+}
+
+function getConnectionString(mode: DbMode): string | undefined {
+    if (mode === 'qa') return sqlConfigStringQa || sqlConfigStringProd;
+    return sqlConfigStringProd;
+}
+
+async function getPool(context: InvocationContext, mode: DbMode) {
     try {
-        if (pool && pool.connected) return pool;
-        if (!sqlConfigString) throw new Error("SqlConnectionString no configurada.");
-        pool = await new sql.ConnectionPool(sqlConfigString).connect();
-        return pool;
+        if (mode === 'qa' && poolQa && poolQa.connected) return poolQa;
+        if (mode === 'prod' && poolProd && poolProd.connected) return poolProd;
+        const conn = getConnectionString(mode);
+        if (!conn) throw new Error("SqlConnectionString no configurada para el modo solicitado.");
+
+        if (mode === 'qa' && !sqlConfigStringQa) {
+            context.warn('SqlConnectionStringQA no configurada, usando SqlConnectionString (prod)');
+        }
+
+        const created = await new sql.ConnectionPool(conn).connect();
+        if (mode === 'qa') poolQa = created;
+        else poolProd = created;
+        return created;
     } catch (err: any) {
         context.error("SQL Connection Error:", err.message);
-        pool = null;
+        if (mode === 'qa') poolQa = null;
+        else poolProd = null;
         throw err;
     }
 }
@@ -46,13 +71,32 @@ async function resolveInstalledAppTopic(token: string, targetUserId: string, tea
     }
 }
 
+async function insertNotificationLog(
+    poolConnection: sql.ConnectionPool,
+    targetEmail: string | null,
+    statusCode: number | null,
+    responseText: string | null,
+    errorMessage: string,
+    payload: string | null
+) {
+    await poolConnection.request()
+        .input('createdAt', sql.BigInt, Date.now())
+        .input('targetEmail', sql.VarChar, targetEmail)
+        .input('statusCode', sql.Int, statusCode)
+        .input('responseText', sql.NVarChar, responseText)
+        .input('errorMessage', sql.NVarChar, errorMessage)
+        .input('payload', sql.NVarChar, payload)
+        .query(`INSERT INTO notifications_log (createdAt, targetEmail, statusCode, responseText, errorMessage, payload) VALUES (@createdAt,@targetEmail,@statusCode,@responseText,@errorMessage,@payload)`);
+}
+
 // Handler Principal de Tickets
 export async function requestsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
     const method = req.method.toLowerCase();
     const id = req.params.id;
+    const dbMode = resolveDbMode(req);
 
     try {
-        const poolConnection = await getPool(context);
+        const poolConnection = await getPool(context, dbMode);
 
         // Ensure requests table has pause-related columns
         await poolConnection.request().query(`
@@ -131,98 +175,102 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                 .query(`INSERT INTO requests (id, userId, userName, subject, description, status, createdAt, priority, aiSummary, category) 
                         VALUES (@id, @userId, @userName, @subject, @description, @status, @createdAt, @priority, @aiSummary, @category)`);
             
-            // Notify active agents (non-blocking; failures don't break request creation)
-            (async () => {
-                try {
-                    // Also notify the team channel via Incoming Webhook (non-blocking)
-                    (async () => {
-                        try {
-                            const webhookUrl = process.env.TEAMS_INCOMING_WEBHOOK;
-                            if (webhookUrl) {
-                                const title = `Nuevo ticket ${newId} - ${r.subject}`;
-                                const text = `Usuario: ${r.userName || r.userId || ''}\nID: ${newId}\nPrioridad: ${r.priority || 'media'}\n\n${r.description || ''}`;
-                                const ok = await sendTeamsIncomingWebhook(webhookUrl, title, text, context);
-                                if (!ok) context.warn('Incoming webhook notify failed', newId);
-                            }
-                        } catch (e:any) { context.warn('Incoming webhook error', e && e.message || e); }
-                    })();
-                    const agentsRes = await poolConnection.request().query("SELECT email FROM authorized_agents WHERE status = 'active' AND notifyReminders = 1 AND email IS NOT NULL");
-                    const agents = agentsRes.recordset || [];
-                    if (agents.length > 0) {
-                        const teamsAppId = process.env.TEAMS_APP_ID;
-                        if (!teamsAppId) {
-                            context.warn('TEAMS_APP_ID not configured; skipping notifications');
-                        } else {
-                            const token = await getGraphAppToken(context);
-                            for (const a of agents) {
-                                const email = a.email;
-                                if (!email) continue;
-                                try {
-                                    // resolve user id
-                                    const uresp = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(email)}?$select=id`, {
-                                        headers: { Authorization: `Bearer ${token}` }
-                                    });
-                                    if (!uresp.ok) {
-                                        const txt = await uresp.text();
-                                        context.warn('Could not resolve user for notification', email, txt);
-                                        await poolConnection.request()
-                                            .input('createdAt', sql.BigInt, Date.now())
-                                            .input('targetEmail', sql.VarChar, email)
-                                            .input('statusCode', sql.Int, uresp.status)
-                                            .input('responseText', sql.NVarChar, txt)
-                                            .input('errorMessage', sql.NVarChar, 'Could not resolve user')
-                                            .input('payload', sql.NVarChar, email)
-                                            .query(`INSERT INTO notifications_log (createdAt, targetEmail, statusCode, responseText, errorMessage, payload) VALUES (@createdAt,@targetEmail,@statusCode,@responseText,@errorMessage,@payload)`);
-                                        continue;
-                                    }
-                                    const ujson = await uresp.json();
-                                    const targetUserId = ujson.id;
-                                    if (!targetUserId) continue;
+            // Notify active agents (awaited to avoid losing work at function teardown)
+            try {
+                const webhookUrl = process.env.TEAMS_INCOMING_WEBHOOK;
+                if (webhookUrl) {
+                    const title = `Nuevo ticket ${newId} - ${r.subject}`;
+                    const text = `Usuario: ${r.userName || r.userId || ''}\nID: ${newId}\nPrioridad: ${r.priority || 'media'}\n\n${r.description || ''}`;
+                    const ok = await sendTeamsIncomingWebhook(webhookUrl, title, text, context);
+                    if (!ok) {
+                        context.warn('Incoming webhook notify failed', newId);
+                        await insertNotificationLog(
+                            poolConnection,
+                            null,
+                            null,
+                            null,
+                            'Incoming webhook notify failed',
+                            JSON.stringify({ ticketId: newId, subject: r.subject })
+                        );
+                    }
+                }
 
-                                    const topicValue = await resolveInstalledAppTopic(token, targetUserId, teamsAppId, context);
-                                    const payload = {
-                                        topic: { source: 'entityUrl', value: topicValue },
-                                        activityType: 'newRequest',
-                                        previewText: { content: `Nuevo ticket ${newId}: ${r.subject}` },
-                                        templateParameters: [ { name: 'requestId', value: newId }, { name: 'summary', value: r.subject } ]
-                                    };
-
-                                    const gres = await fetch(`https://graph.microsoft.com/v1.0/users/${targetUserId}/teamwork/sendActivityNotification`, {
-                                        method: 'POST',
-                                        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-                                        body: JSON.stringify(payload)
-                                    });
-                                    const gresText = await gres.text();
-                                    if (!gres.ok) {
-                                        context.warn('Failed to send notification to', email, gres.status, gresText);
-                                        await poolConnection.request()
-                                            .input('createdAt', sql.BigInt, Date.now())
-                                            .input('targetEmail', sql.VarChar, email)
-                                            .input('statusCode', sql.Int, gres.status)
-                                            .input('responseText', sql.NVarChar, gresText)
-                                            .input('errorMessage', sql.NVarChar, 'Graph sendActivityNotification failed')
-                                            .input('payload', sql.NVarChar, JSON.stringify(payload))
-                                            .query(`INSERT INTO notifications_log (createdAt, targetEmail, statusCode, responseText, errorMessage, payload) VALUES (@createdAt,@targetEmail,@statusCode,@responseText,@errorMessage,@payload)`);
-                                    }
-                                } catch (e:any) {
-                                    const em = e && e.message || String(e);
-                                    context.warn('Notify agent error', em);
+                const agentsRes = await poolConnection.request().query("SELECT email FROM authorized_agents WHERE status = 'active' AND notifyReminders = 1 AND email IS NOT NULL");
+                const agents = agentsRes.recordset || [];
+                if (agents.length > 0) {
+                    const teamsAppId = process.env.TEAMS_APP_ID;
+                    if (!teamsAppId) {
+                        context.warn('TEAMS_APP_ID not configured; skipping notifications');
+                    } else {
+                        const token = await getGraphAppToken(context);
+                        for (const a of agents) {
+                            const email = a.email;
+                            if (!email) continue;
+                            try {
+                                // resolve user id
+                                const uresp = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(email)}?$select=id`, {
+                                    headers: { Authorization: `Bearer ${token}` }
+                                });
+                                if (!uresp.ok) {
+                                    const txt = await uresp.text();
+                                    context.warn('Could not resolve user for notification', email, txt);
                                     await poolConnection.request()
                                         .input('createdAt', sql.BigInt, Date.now())
                                         .input('targetEmail', sql.VarChar, email)
-                                        .input('statusCode', sql.Int, null)
-                                        .input('responseText', sql.NVarChar, null)
-                                        .input('errorMessage', sql.NVarChar, em)
-                                        .input('payload', sql.NVarChar, JSON.stringify({ email, newId, subject: r.subject }))
+                                        .input('statusCode', sql.Int, uresp.status)
+                                        .input('responseText', sql.NVarChar, txt)
+                                        .input('errorMessage', sql.NVarChar, 'Could not resolve user')
+                                        .input('payload', sql.NVarChar, email)
+                                        .query(`INSERT INTO notifications_log (createdAt, targetEmail, statusCode, responseText, errorMessage, payload) VALUES (@createdAt,@targetEmail,@statusCode,@responseText,@errorMessage,@payload)`);
+                                    continue;
+                                }
+                                const ujson = await uresp.json();
+                                const targetUserId = ujson.id;
+                                if (!targetUserId) continue;
+
+                                const topicValue = await resolveInstalledAppTopic(token, targetUserId, teamsAppId, context);
+                                const payload = {
+                                    topic: { source: 'entityUrl', value: topicValue },
+                                    activityType: 'newRequest',
+                                    previewText: { content: `Nuevo ticket ${newId}: ${r.subject}` },
+                                    templateParameters: [{ name: 'requestId', value: newId }, { name: 'summary', value: r.subject }]
+                                };
+
+                                const gres = await fetch(`https://graph.microsoft.com/v1.0/users/${targetUserId}/teamwork/sendActivityNotification`, {
+                                    method: 'POST',
+                                    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(payload)
+                                });
+                                const gresText = await gres.text();
+                                if (!gres.ok) {
+                                    context.warn('Failed to send notification to', email, gres.status, gresText);
+                                    await poolConnection.request()
+                                        .input('createdAt', sql.BigInt, Date.now())
+                                        .input('targetEmail', sql.VarChar, email)
+                                        .input('statusCode', sql.Int, gres.status)
+                                        .input('responseText', sql.NVarChar, gresText)
+                                        .input('errorMessage', sql.NVarChar, 'Graph sendActivityNotification failed')
+                                        .input('payload', sql.NVarChar, JSON.stringify(payload))
                                         .query(`INSERT INTO notifications_log (createdAt, targetEmail, statusCode, responseText, errorMessage, payload) VALUES (@createdAt,@targetEmail,@statusCode,@responseText,@errorMessage,@payload)`);
                                 }
+                            } catch (e:any) {
+                                const em = e && e.message || String(e);
+                                context.warn('Notify agent error', em);
+                                await poolConnection.request()
+                                    .input('createdAt', sql.BigInt, Date.now())
+                                    .input('targetEmail', sql.VarChar, email)
+                                    .input('statusCode', sql.Int, null)
+                                    .input('responseText', sql.NVarChar, null)
+                                    .input('errorMessage', sql.NVarChar, em)
+                                    .input('payload', sql.NVarChar, JSON.stringify({ email, newId, subject: r.subject }))
+                                    .query(`INSERT INTO notifications_log (createdAt, targetEmail, statusCode, responseText, errorMessage, payload) VALUES (@createdAt,@targetEmail,@statusCode,@responseText,@errorMessage,@payload)`);
                             }
                         }
                     }
-                } catch (e:any) {
-                    context.warn('Notifications dispatch failed', e && e.message || e);
                 }
-            })();
+            } catch (e:any) {
+                context.warn('Notifications dispatch failed', e && e.message || e);
+            }
 
             return { status: 201, jsonBody: { success: true, id: newId } };
         }
@@ -295,55 +343,62 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
 
                     // If transitioning to waiting, notify active agents
                     if (status === 'waiting') {
-                        (async () => {
-                            try {
-                                const rres = await poolConnection.request().input('id', sql.VarChar, id).query('SELECT id, subject FROM requests WHERE id = @id');
-                                if (!rres.recordset || rres.recordset.length === 0) return;
-                                const reqRow = rres.recordset[0];
-                                        // Notify team channel via Incoming Webhook when a request moves to waiting
-                                        (async () => {
-                                            try {
-                                                const webhookUrl = process.env.TEAMS_INCOMING_WEBHOOK;
-                                                if (webhookUrl) {
-                                                    const title = `Ticket en cola ${reqRow.id} - ${reqRow.subject}`;
-                                                    const text = `ID: ${reqRow.id}\nResumen: ${reqRow.subject}\n\nRevisar en la app.`;
-                                                    const ok = await sendTeamsIncomingWebhook(webhookUrl, title, text, context);
-                                                    if (!ok) context.warn('Incoming webhook notify failed for waiting transition', reqRow.id);
-                                                }
-                                            } catch (e:any) { context.warn('Incoming webhook error (waiting)', e && e.message || e); }
-                                        })();
-                                const agentsRes = await poolConnection.request().query("SELECT email FROM authorized_agents WHERE status = 'active' AND notifyReminders = 1 AND email IS NOT NULL");
-                                const agents = agentsRes.recordset || [];
-                                const teamsAppId = process.env.TEAMS_APP_ID;
-                                if (!teamsAppId) {
-                                    context.warn('TEAMS_APP_ID not configured; skipping notifications');
-                                    return;
+                        try {
+                            const rres = await poolConnection.request().input('id', sql.VarChar, id).query('SELECT id, subject FROM requests WHERE id = @id');
+                            if (!rres.recordset || rres.recordset.length === 0) return { status: 200, jsonBody: { success: true } };
+                            const reqRow = rres.recordset[0];
+
+                            const webhookUrl = process.env.TEAMS_INCOMING_WEBHOOK;
+                            if (webhookUrl) {
+                                const title = `Ticket en cola ${reqRow.id} - ${reqRow.subject}`;
+                                const text = `ID: ${reqRow.id}\nResumen: ${reqRow.subject}\n\nRevisar en la app.`;
+                                const ok = await sendTeamsIncomingWebhook(webhookUrl, title, text, context);
+                                if (!ok) {
+                                    context.warn('Incoming webhook notify failed for waiting transition', reqRow.id);
+                                    await insertNotificationLog(
+                                        poolConnection,
+                                        null,
+                                        null,
+                                        null,
+                                        'Incoming webhook notify failed for waiting transition',
+                                        JSON.stringify({ ticketId: reqRow.id, subject: reqRow.subject })
+                                    );
                                 }
-                                if (agents.length === 0) return;
-                                const token = await getGraphAppToken(context);
-                                for (const a of agents) {
-                                    const email = a.email;
-                                    if (!email) continue;
-                                    try {
-                                        const uresp = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(email)}?$select=id`, { headers: { Authorization: `Bearer ${token}` } });
-                                        if (!uresp.ok) { const txt = await uresp.text(); context.warn('Could not resolve user for notification', email, txt); await poolConnection.request().input('createdAt', sql.BigInt, Date.now()).input('targetEmail', sql.VarChar, email).input('statusCode', sql.Int, uresp.status).input('responseText', sql.NVarChar, txt).input('errorMessage', sql.NVarChar, 'Could not resolve user').input('payload', sql.NVarChar, email).query(`INSERT INTO notifications_log (createdAt, targetEmail, statusCode, responseText, errorMessage, payload) VALUES (@createdAt,@targetEmail,@statusCode,@responseText,@errorMessage,@payload)`); continue; }
-                                        const ujson = await uresp.json();
-                                        const targetUserId = ujson.id;
-                                        if (!targetUserId) continue;
-                                        const topicValue = await resolveInstalledAppTopic(token, targetUserId, teamsAppId, context);
-                                        const payload = {
-                                            topic: { source: 'entityUrl', value: topicValue },
-                                            activityType: 'newRequest',
-                                            previewText: { content: `Ticket en cola ${reqRow.id}: ${reqRow.subject}` },
-                                            templateParameters: [{ name: 'requestId', value: reqRow.id }, { name: 'summary', value: reqRow.subject }]
-                                        };
-                                        const gres = await fetch(`https://graph.microsoft.com/v1.0/users/${targetUserId}/teamwork/sendActivityNotification`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                                        const gresText = await gres.text();
-                                        if (!gres.ok) { context.warn('Failed to send notification to', email, gres.status, gresText); await poolConnection.request().input('createdAt', sql.BigInt, Date.now()).input('targetEmail', sql.VarChar, email).input('statusCode', sql.Int, gres.status).input('responseText', sql.NVarChar, gresText).input('errorMessage', sql.NVarChar, 'Graph sendActivityNotification failed').input('payload', sql.NVarChar, JSON.stringify(payload)).query(`INSERT INTO notifications_log (createdAt, targetEmail, statusCode, responseText, errorMessage, payload) VALUES (@createdAt,@targetEmail,@statusCode,@responseText,@errorMessage,@payload)`); }
-                                    } catch (e:any) { const em = e && e.message || String(e); context.warn('Notify agent error', em); await poolConnection.request().input('createdAt', sql.BigInt, Date.now()).input('targetEmail', sql.VarChar, email).input('statusCode', sql.Int, null).input('responseText', sql.NVarChar, null).input('errorMessage', sql.NVarChar, em).input('payload', sql.NVarChar, JSON.stringify({ id, subject: reqRow.subject })).query(`INSERT INTO notifications_log (createdAt, targetEmail, statusCode, responseText, errorMessage, payload) VALUES (@createdAt,@targetEmail,@statusCode,@responseText,@errorMessage,@payload)`); }
-                                }
-                            } catch (e:any) { context.warn('Notifications dispatch failed', e && e.message || e); }
-                        })();
+                            }
+
+                            const agentsRes = await poolConnection.request().query("SELECT email FROM authorized_agents WHERE status = 'active' AND notifyReminders = 1 AND email IS NOT NULL");
+                            const agents = agentsRes.recordset || [];
+                            const teamsAppId = process.env.TEAMS_APP_ID;
+                            if (!teamsAppId) {
+                                context.warn('TEAMS_APP_ID not configured; skipping notifications');
+                                return { status: 200, jsonBody: { success: true } };
+                            }
+                            if (agents.length === 0) return { status: 200, jsonBody: { success: true } };
+                            const token = await getGraphAppToken(context);
+                            for (const a of agents) {
+                                const email = a.email;
+                                if (!email) continue;
+                                try {
+                                    const uresp = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(email)}?$select=id`, { headers: { Authorization: `Bearer ${token}` } });
+                                    if (!uresp.ok) { const txt = await uresp.text(); context.warn('Could not resolve user for notification', email, txt); await poolConnection.request().input('createdAt', sql.BigInt, Date.now()).input('targetEmail', sql.VarChar, email).input('statusCode', sql.Int, uresp.status).input('responseText', sql.NVarChar, txt).input('errorMessage', sql.NVarChar, 'Could not resolve user').input('payload', sql.NVarChar, email).query(`INSERT INTO notifications_log (createdAt, targetEmail, statusCode, responseText, errorMessage, payload) VALUES (@createdAt,@targetEmail,@statusCode,@responseText,@errorMessage,@payload)`); continue; }
+                                    const ujson = await uresp.json();
+                                    const targetUserId = ujson.id;
+                                    if (!targetUserId) continue;
+                                    const topicValue = await resolveInstalledAppTopic(token, targetUserId, teamsAppId, context);
+                                    const payload = {
+                                        topic: { source: 'entityUrl', value: topicValue },
+                                        activityType: 'newRequest',
+                                        previewText: { content: `Ticket en cola ${reqRow.id}: ${reqRow.subject}` },
+                                        templateParameters: [{ name: 'requestId', value: reqRow.id }, { name: 'summary', value: reqRow.subject }]
+                                    };
+                                    const gres = await fetch(`https://graph.microsoft.com/v1.0/users/${targetUserId}/teamwork/sendActivityNotification`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                                    const gresText = await gres.text();
+                                    if (!gres.ok) { context.warn('Failed to send notification to', email, gres.status, gresText); await poolConnection.request().input('createdAt', sql.BigInt, Date.now()).input('targetEmail', sql.VarChar, email).input('statusCode', sql.Int, gres.status).input('responseText', sql.NVarChar, gresText).input('errorMessage', sql.NVarChar, 'Graph sendActivityNotification failed').input('payload', sql.NVarChar, JSON.stringify(payload)).query(`INSERT INTO notifications_log (createdAt, targetEmail, statusCode, responseText, errorMessage, payload) VALUES (@createdAt,@targetEmail,@statusCode,@responseText,@errorMessage,@payload)`); }
+                                } catch (e:any) { const em = e && e.message || String(e); context.warn('Notify agent error', em); await poolConnection.request().input('createdAt', sql.BigInt, Date.now()).input('targetEmail', sql.VarChar, email).input('statusCode', sql.Int, null).input('responseText', sql.NVarChar, null).input('errorMessage', sql.NVarChar, em).input('payload', sql.NVarChar, JSON.stringify({ id, subject: reqRow.subject })).query(`INSERT INTO notifications_log (createdAt, targetEmail, statusCode, responseText, errorMessage, payload) VALUES (@createdAt,@targetEmail,@statusCode,@responseText,@errorMessage,@payload)`); }
+                            }
+                        } catch (e:any) {
+                            context.warn('Notifications dispatch failed', e && e.message || e);
+                        }
                     }
                 }
             }
@@ -358,8 +413,9 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
 // Handler de Agentes Autorizados
 export async function agentsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
     const method = req.method.toLowerCase();
+    const dbMode = resolveDbMode(req);
     try {
-        const poolConnection = await getPool(context);
+        const poolConnection = await getPool(context, dbMode);
 
         // Crear tabla si no existe (inicializaci├│n robusta) y asegurar columnas para status/approval
         await poolConnection.request().query(`
@@ -474,8 +530,9 @@ app.http('agents', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous',
 
 // Approve pending request
 export async function agentsApproveHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    const dbMode = resolveDbMode(req);
     try {
-        const poolConnection = await getPool(context);
+        const poolConnection = await getPool(context, dbMode);
         let body: any;
         try { body = await req.json(); } catch (e) { return { status: 400, body: 'JSON malformado' }; }
         const email = body?.email?.toLowerCase();
@@ -498,8 +555,9 @@ export async function agentsApproveHandler(req: HttpRequest, context: Invocation
 
 // Reject pending request
 export async function agentsRejectHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    const dbMode = resolveDbMode(req);
     try {
-        const poolConnection = await getPool(context);
+        const poolConnection = await getPool(context, dbMode);
         let body: any;
         try { body = await req.json(); } catch (e) { return { status: 400, body: 'JSON malformado' }; }
         const email = body?.email?.toLowerCase();
@@ -522,9 +580,10 @@ app.http('agentsReject', { methods: ['POST'], authLevel: 'anonymous', route: 'ag
 
 // Agent visibility in user dashboard
 export async function agentsVisibilityHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    const dbMode = resolveDbMode(req);
     try {
         if (req.method.toLowerCase() !== 'post') return { status: 405, body: 'Not Allowed' };
-        const poolConnection = await getPool(context);
+        const poolConnection = await getPool(context, dbMode);
         await poolConnection.request().query(`
             IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'showOnUserDashboard' AND Object_ID = Object_ID(N'authorized_agents'))
             BEGIN
@@ -561,8 +620,9 @@ app.http('agentsVisibility', { methods: ['POST'], authLevel: 'anonymous', route:
 
 // Agent settings: GET ?email=...  POST { email, notifyReminders }
 export async function agentsSettingsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    const dbMode = resolveDbMode(req);
     try {
-        const poolConnection = await getPool(context);
+        const poolConnection = await getPool(context, dbMode);
         if (req.method.toLowerCase() === 'get') {
             const email = req.query.get('email');
             if (!email) return { status: 400, body: 'Email requerido' };
@@ -739,8 +799,9 @@ app.http('sendActivityNotification', { methods: ['POST'], authLevel: 'anonymous'
 
 // Expose notification logs for debugging in Testing
 export async function notificationsLogsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    const dbMode = resolveDbMode(req);
     try {
-        const poolConnection = await getPool(context);
+        const poolConnection = await getPool(context, dbMode);
         const limit = parseInt(req.query.get('limit') || '50', 10);
         const result = await poolConnection.request().query(`SELECT TOP (${limit}) id, createdAt, targetEmail, statusCode, responseText, errorMessage, payload FROM notifications_log ORDER BY createdAt DESC`);
         return { status: 200, jsonBody: result.recordset };
@@ -754,8 +815,9 @@ app.http('notificationsLogs', { methods: ['GET'], authLevel: 'anonymous', route:
 
 // Stats handler: computes average and median wait (minutes) over recent window and caches in DB
 export async function statsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    const dbMode = resolveDbMode(req);
     try {
-        const poolConnection = await getPool(context);
+        const poolConnection = await getPool(context, dbMode);
 
         // ensure cached_stats table
         await poolConnection.request().query(`

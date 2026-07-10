@@ -5,9 +5,25 @@ const isLocal = typeof window !== 'undefined' && window.location && window.locat
 const API_ENDPOINT = isLocal ? `${window.location.protocol}//${window.location.hostname}:7071/api/requests` : '/api/requests';
 const AGENTS_ENDPOINT = isLocal ? `${window.location.protocol}//${window.location.hostname}:7071/api/agents` : '/api/agents';
 
+function getAppMode(): 'prod' | 'qa' {
+  try {
+    const raw = (localStorage.getItem('appMode') || '').toLowerCase();
+    return raw === 'qa' ? 'qa' : 'prod';
+  } catch (e) {
+    return 'prod';
+  }
+}
+
+function withModeHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  return {
+    'x-app-mode': getAppMode(),
+    ...extra,
+  };
+}
+
 export const storageService = {
   async fetchAllRequests(): Promise<SupportRequest[]> {
-    const response = await fetch(API_ENDPOINT);
+    const response = await fetch(API_ENDPOINT, { headers: withModeHeaders() });
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Error ${response.status} cargando tickets: ${errorText || response.statusText}`);
@@ -19,7 +35,7 @@ export const storageService = {
   async saveRequest(request: Partial<SupportRequest>): Promise<boolean> {
     const response = await fetch(API_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: withModeHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(request)
     });
     if (!response.ok) {
@@ -32,7 +48,7 @@ export const storageService = {
   async updateRequestStatus(id: string, status: SupportRequest['status'], extraData: Partial<SupportRequest> = {}): Promise<boolean> {
     const response = await fetch(`${API_ENDPOINT}/${id}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: withModeHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ status, ...extraData })
     });
     if (!response.ok) {
@@ -43,7 +59,7 @@ export const storageService = {
   },
 
   async fetchAgents(): Promise<string[]> {
-    const response = await fetch(AGENTS_ENDPOINT);
+    const response = await fetch(AGENTS_ENDPOINT, { headers: withModeHeaders() });
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Error ${response.status} consultando agentes: ${errorText || response.statusText}`);
@@ -53,7 +69,7 @@ export const storageService = {
   },
 
   async fetchAgentDetails(): Promise<AuthorizedAgent[]> {
-    const response = await fetch(`${AGENTS_ENDPOINT}?details=1`);
+    const response = await fetch(`${AGENTS_ENDPOINT}?details=1`, { headers: withModeHeaders() });
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Error ${response.status} consultando detalle de agentes: ${errorText || response.statusText}`);
@@ -70,7 +86,7 @@ export const storageService = {
 
   async fetchPendingAgents(): Promise<string[]> {
     const url = `${AGENTS_ENDPOINT}?pending=1`;
-    const response = await fetch(url);
+    const response = await fetch(url, { headers: withModeHeaders() });
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Error ${response.status} consultando solicitudes pendientes: ${errorText || response.statusText}`);
@@ -83,7 +99,7 @@ export const storageService = {
     console.log("Iniciando registro de agente para:", email, 'active=', active);
     const response = await fetch(AGENTS_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: withModeHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ email, active })
     });
     const status = response.status;
@@ -101,7 +117,7 @@ export const storageService = {
     const url = `${AGENTS_ENDPOINT}/approve`;
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: withModeHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ email })
     });
     if (!response.ok) {
@@ -115,7 +131,7 @@ export const storageService = {
     const url = `${AGENTS_ENDPOINT}/reject`;
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: withModeHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ email })
     });
     if (!response.ok) {
@@ -129,7 +145,7 @@ export const storageService = {
     const url = `${AGENTS_ENDPOINT}/visibility`;
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: withModeHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ email, showOnUserDashboard })
     });
     if (!response.ok) {
@@ -142,7 +158,7 @@ export const storageService = {
   async fetchAgentSettings(email: string): Promise<{ notifyReminders: boolean } | null> {
     try {
       const url = `${AGENTS_ENDPOINT}/settings?email=${encodeURIComponent(email)}`;
-      const resp = await fetch(url);
+      const resp = await fetch(url, { headers: withModeHeaders() });
       if (!resp.ok) return null;
       const data = await resp.json();
       return { notifyReminders: !!data.notifyReminders };
@@ -155,7 +171,7 @@ export const storageService = {
     const url = `${AGENTS_ENDPOINT}/settings`;
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: withModeHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ email, notifyReminders })
     });
     return response.ok;
@@ -163,7 +179,8 @@ export const storageService = {
 
   async removeAgent(email: string): Promise<boolean> {
     const response = await fetch(`${AGENTS_ENDPOINT}?email=${encodeURIComponent(email)}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: withModeHeaders()
     });
     if (!response.ok) {
       const errorText = await response.text();
