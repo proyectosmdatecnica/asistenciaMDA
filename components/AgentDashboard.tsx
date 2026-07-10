@@ -957,13 +957,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       <td className="p-4 w-44 sticky right-0 z-10 bg-white group-hover:bg-gray-50 whitespace-nowrap">
                         <div className="flex items-center space-x-2">
                           <button
+                            title="Ver detalle"
                             onClick={(e) => { e.stopPropagation(); setSelectedRequest(req); }}
-                            className="bg-gray-100 text-gray-700 text-[9px] font-black px-3 py-2 rounded-xl flex items-center space-x-2"
-                          ><Eye size={14}/><span>VER</span></button>
+                            className="bg-gray-100 text-gray-700 p-2 rounded-xl flex items-center justify-center"
+                          ><Eye size={14}/></button>
                           <button
+                            title="Reabrir ticket"
                             onClick={(e) => { e.stopPropagation(); onUpdateStatus(req.id, 'waiting'); }}
-                            className="bg-indigo-50 text-indigo-600 text-[9px] font-black px-3 py-2 rounded-xl flex items-center space-x-2"
-                          ><RotateCcw size={14}/><span>REABRIR</span></button>
+                            className="bg-indigo-50 text-indigo-600 p-2 rounded-xl flex items-center justify-center"
+                          ><RotateCcw size={14}/></button>
                         </div>
                       </td>
                     </tr>
