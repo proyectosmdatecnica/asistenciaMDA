@@ -243,6 +243,16 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                             JSON.stringify({ ticketId: newId, subject: r.subject })
                         );
                     }
+                } else {
+                    context.warn('TEAMS_INCOMING_WEBHOOK not configured; channel notification skipped', newId);
+                    await insertNotificationLog(
+                        poolConnection,
+                        null,
+                        null,
+                        null,
+                        'TEAMS_INCOMING_WEBHOOK not configured; channel notification skipped',
+                        JSON.stringify({ ticketId: newId, subject: r.subject })
+                    );
                 }
 
                 const agentsRes = await poolConnection.request().query("SELECT email FROM authorized_agents WHERE status = 'active' AND notifyReminders = 1 AND email IS NOT NULL");
@@ -414,6 +424,16 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                                         JSON.stringify({ ticketId: reqRow.id, subject: reqRow.subject })
                                     );
                                 }
+                            } else {
+                                context.warn('TEAMS_INCOMING_WEBHOOK not configured; waiting channel notification skipped', reqRow.id);
+                                await insertNotificationLog(
+                                    poolConnection,
+                                    null,
+                                    null,
+                                    null,
+                                    'TEAMS_INCOMING_WEBHOOK not configured; waiting channel notification skipped',
+                                    JSON.stringify({ ticketId: reqRow.id, subject: reqRow.subject })
+                                );
                             }
 
                             const agentsRes = await poolConnection.request().query("SELECT email FROM authorized_agents WHERE status = 'active' AND notifyReminders = 1 AND email IS NOT NULL");
