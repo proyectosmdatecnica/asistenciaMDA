@@ -227,31 +227,18 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
             
             // Notify active agents (awaited to avoid losing work at function teardown)
             try {
-                const webhookUrl = process.env.TEAMS_INCOMING_WEBHOOK;
-                if (webhookUrl) {
-                    const title = `Nuevo ticket ${newId} - ${r.subject}`;
-                    const text = `Usuario: ${r.userName || r.userId || ''}\nID: ${newId}\nPrioridad: ${r.priority || 'media'}\n\n${r.description || ''}`;
-                    const ok = await sendTeamsIncomingWebhook(webhookUrl, title, text, context);
-                    if (!ok) {
-                        context.warn('Incoming webhook notify failed', newId);
-                        await insertNotificationLog(
-                            poolConnection,
-                            null,
-                            null,
-                            null,
-                            'Incoming webhook notify failed',
-                            JSON.stringify({ ticketId: newId, subject: r.subject })
-                        );
-                    }
-                } else {
-                    context.warn('TEAMS_INCOMING_WEBHOOK not configured; channel notification skipped', newId);
+                const title = `Nuevo ticket ${newId} - ${r.subject}`;
+                const text = `Usuario: ${r.userName || r.userId || ''}\nID: ${newId}\nPrioridad: ${r.priority || 'media'}\n\n${r.description || ''}`;
+                const channelResult = await sendTeamsChannelNotification(title, text, context);
+                if (!channelResult.ok) {
+                    context.warn('Channel notification failed', channelResult.provider, newId, channelResult.statusCode, channelResult.errorMessage);
                     await insertNotificationLog(
                         poolConnection,
                         null,
-                        null,
-                        null,
-                        'TEAMS_INCOMING_WEBHOOK not configured; channel notification skipped',
-                        JSON.stringify({ ticketId: newId, subject: r.subject })
+                        channelResult.statusCode ?? null,
+                        channelResult.responseText ?? null,
+                        channelResult.errorMessage || 'Channel notification failed',
+                        JSON.stringify({ ticketId: newId, subject: r.subject, provider: channelResult.provider })
                     );
                 }
 
@@ -408,31 +395,18 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
                             if (!rres.recordset || rres.recordset.length === 0) return { status: 200, jsonBody: { success: true } };
                             const reqRow = rres.recordset[0];
 
-                            const webhookUrl = process.env.TEAMS_INCOMING_WEBHOOK;
-                            if (webhookUrl) {
-                                const title = `Ticket en cola ${reqRow.id} - ${reqRow.subject}`;
-                                const text = `ID: ${reqRow.id}\nResumen: ${reqRow.subject}\n\nRevisar en la app.`;
-                                const ok = await sendTeamsIncomingWebhook(webhookUrl, title, text, context);
-                                if (!ok) {
-                                    context.warn('Incoming webhook notify failed for waiting transition', reqRow.id);
-                                    await insertNotificationLog(
-                                        poolConnection,
-                                        null,
-                                        null,
-                                        null,
-                                        'Incoming webhook notify failed for waiting transition',
-                                        JSON.stringify({ ticketId: reqRow.id, subject: reqRow.subject })
-                                    );
-                                }
-                            } else {
-                                context.warn('TEAMS_INCOMING_WEBHOOK not configured; waiting channel notification skipped', reqRow.id);
+                            const title = `Ticket en cola ${reqRow.id} - ${reqRow.subject}`;
+                            const text = `ID: ${reqRow.id}\nResumen: ${reqRow.subject}\n\nRevisar en la app.`;
+                            const channelResult = await sendTeamsChannelNotification(title, text, context);
+                            if (!channelResult.ok) {
+                                context.warn('Channel notification failed for waiting transition', channelResult.provider, reqRow.id, channelResult.statusCode, channelResult.errorMessage);
                                 await insertNotificationLog(
                                     poolConnection,
                                     null,
-                                    null,
-                                    null,
-                                    'TEAMS_INCOMING_WEBHOOK not configured; waiting channel notification skipped',
-                                    JSON.stringify({ ticketId: reqRow.id, subject: reqRow.subject })
+                                    channelResult.statusCode ?? null,
+                                    channelResult.responseText ?? null,
+                                    channelResult.errorMessage || 'Channel notification failed for waiting transition',
+                                    JSON.stringify({ ticketId: reqRow.id, subject: reqRow.subject, provider: channelResult.provider })
                                 );
                             }
 
@@ -824,7 +798,15 @@ async function getGraphAppToken(context: InvocationContext) {
 }
 
 // Fallback: send a message to a Teams channel using an Incoming Webhook URL
-async function sendTeamsIncomingWebhook(webhookUrl: string, title: string, text: string, context: InvocationContext) {
+type ChannelSendResult = {
+    ok: boolean;
+    provider: 'workflow' | 'incoming-webhook' | 'none';
+    statusCode?: number;
+    responseText?: string;
+    errorMessage?: string;
+};
+
+async function sendTeamsIncomingWebhook(webhookUrl: string, title: string, text: string, context: InvocationContext): Promise<ChannelSendResult> {
     try {
         const body = {
             '@type': 'MessageCard',
@@ -835,16 +817,81 @@ async function sendTeamsIncomingWebhook(webhookUrl: string, title: string, text:
             text
         };
         const resp = await fetch(webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const txt = await resp.text();
         if (!resp.ok) {
-            const txt = await resp.text();
             context.warn('Incoming webhook failed', resp.status, txt);
-            return false;
+            return {
+                ok: false,
+                provider: 'incoming-webhook',
+                statusCode: resp.status,
+                responseText: txt,
+                errorMessage: 'Incoming webhook failed'
+            };
         }
-        return true;
+        return { ok: true, provider: 'incoming-webhook', statusCode: resp.status, responseText: txt };
     } catch (e:any) {
         context.warn('sendTeamsIncomingWebhook error', e && e.message || e);
-        return false;
+        return {
+            ok: false,
+            provider: 'incoming-webhook',
+            errorMessage: e && e.message || String(e)
+        };
     }
+}
+
+async function sendTeamsWorkflowWebhook(workflowUrl: string, title: string, text: string, context: InvocationContext): Promise<ChannelSendResult> {
+    try {
+        const body = {
+            source: 'Asistencia MDA',
+            title,
+            text,
+            createdAt: new Date().toISOString()
+        };
+        const resp = await fetch(workflowUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const txt = await resp.text();
+        if (!resp.ok) {
+            context.warn('Workflow webhook failed', resp.status, txt);
+            return {
+                ok: false,
+                provider: 'workflow',
+                statusCode: resp.status,
+                responseText: txt,
+                errorMessage: 'Workflow webhook failed'
+            };
+        }
+        return { ok: true, provider: 'workflow', statusCode: resp.status, responseText: txt };
+    } catch (e:any) {
+        context.warn('sendTeamsWorkflowWebhook error', e && e.message || e);
+        return {
+            ok: false,
+            provider: 'workflow',
+            errorMessage: e && e.message || String(e)
+        };
+    }
+}
+
+async function sendTeamsChannelNotification(title: string, text: string, context: InvocationContext, incomingWebhookOverride?: string): Promise<ChannelSendResult> {
+    const workflowUrl = process.env.TEAMS_WORKFLOW_WEBHOOK;
+    const incomingWebhookUrl = incomingWebhookOverride || process.env.TEAMS_INCOMING_WEBHOOK;
+
+    if (workflowUrl) {
+        const workflowResult = await sendTeamsWorkflowWebhook(workflowUrl, title, text, context);
+        if (workflowResult.ok) return workflowResult;
+    }
+
+    if (incomingWebhookUrl) {
+        return await sendTeamsIncomingWebhook(incomingWebhookUrl, title, text, context);
+    }
+
+    return {
+        ok: false,
+        provider: 'none',
+        errorMessage: 'Neither TEAMS_WORKFLOW_WEBHOOK nor TEAMS_INCOMING_WEBHOOK is configured'
+    };
 }
 
 export async function sendActivityNotificationHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
@@ -878,7 +925,7 @@ export async function sendActivityNotificationHandler(req: HttpRequest, context:
         }
 
         const teamsAppId = process.env.TEAMS_APP_ID || body.teamsAppId;
-        const webhook = process.env.TEAMS_INCOMING_WEBHOOK || body.incomingWebhook;
+        const webhook = body.incomingWebhook || process.env.TEAMS_INCOMING_WEBHOOK;
 
         const topicUrl = body.topicUrl || (teamsAppId ? `https://graph.microsoft.com/v1.0/teamsApps/${teamsAppId}` : undefined);
         const payload = {
@@ -903,15 +950,22 @@ export async function sendActivityNotificationHandler(req: HttpRequest, context:
             }
         }
 
-        if (webhook) {
-            const title = previewText && previewText.content ? previewText.content : 'Notificación de Asistencia MDA';
-            const text = `Para: ${userPrincipalName || targetUserId}\n\n${title}\n\n${templateParameters && templateParameters.length ? JSON.stringify(templateParameters) : ''}`;
-            const ok = await sendTeamsIncomingWebhook(webhook, title, text, context);
-            if (ok) return { status: 200, jsonBody: { success: true, fallback: 'webhook' } };
-            return { status: 500, jsonBody: { error: 'Failed to send via Graph and webhook' } };
+        const title = previewText && previewText.content ? previewText.content : 'Notificación de Asistencia MDA';
+        const text = `Para: ${userPrincipalName || targetUserId}\n\n${title}\n\n${templateParameters && templateParameters.length ? JSON.stringify(templateParameters) : ''}`;
+        const channelResult = await sendTeamsChannelNotification(title, text, context, webhook);
+        if (channelResult.ok) {
+            return { status: 200, jsonBody: { success: true, fallback: channelResult.provider } };
         }
 
-        return { status: 400, body: 'TEAMS_APP_ID env/teamsAppId or TEAMS_INCOMING_WEBHOOK required' };
+        return {
+            status: 500,
+            jsonBody: {
+                error: 'Failed to send via Graph and channel webhook',
+                provider: channelResult.provider,
+                statusCode: channelResult.statusCode,
+                detail: channelResult.errorMessage || channelResult.responseText || null
+            }
+        };
     } catch (err:any) {
         context.error('sendActivityNotificationHandler error', err.message || err);
         return { status: 500, jsonBody: { error: err.message || err } };
