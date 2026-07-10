@@ -861,7 +861,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                     <tr className="bg-gray-50 border-b border-gray-100">
                     <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-24 cursor-pointer" onClick={() => toggleHistorySort('id')}>ID{getSortLabel('id')}</th>
                     <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-48 cursor-pointer" onClick={() => toggleHistorySort('userName')}>Usuario{getSortLabel('userName')}</th>
-                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-[28%] min-w-[220px] cursor-pointer" onClick={() => toggleHistorySort('subject')}>Asunto{getSortLabel('subject')}</th>
+                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-[22%] min-w-[170px] cursor-pointer" onClick={() => toggleHistorySort('subject')}>Asunto{getSortLabel('subject')}</th>
                     <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-28 cursor-pointer" onClick={() => toggleHistorySort('agentName')}>Agente{getSortLabel('agentName')}</th>
                     <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-44 cursor-pointer" onClick={() => toggleHistorySort('createdAt')}>Creado{getSortLabel('createdAt')}</th>
                     <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-44 cursor-pointer" onClick={() => toggleHistorySort('completedAt')}>Cierre{getSortLabel('completedAt')}</th>
@@ -928,7 +928,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       <td className="p-4 font-black text-gray-900">{req.id}</td>
                       <td className="p-4 font-black text-gray-900">{req.userName}</td>
                       <td className="p-4 font-bold text-gray-600">
-                        <div className="relative max-w-[20rem] xl:max-w-[28rem]">
+                        <div className="relative max-w-[14rem] xl:max-w-[18rem]">
                           <span className="block truncate hover:underline">{req.subject}</span>
                           <div className="hidden group-hover:block absolute left-0 top-full mt-2 z-50 w-[min(60vw,40rem)] max-h-[35vh] overflow-auto bg-white p-3 rounded-lg shadow-lg border border-gray-100 text-sm text-gray-700 whitespace-pre-wrap">
                             {(req.description && req.description.length > 0) ? `${req.subject} — ${req.description}` : req.subject}
