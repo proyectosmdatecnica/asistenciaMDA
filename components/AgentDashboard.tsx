@@ -37,6 +37,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
   const [ticketDescription, setTicketDescription] = useState('');
   const [ticketPriority, setTicketPriority] = useState<SupportRequest['priority']>('medium');
   const [isCreatingTicket, setIsCreatingTicket] = useState(false);
+  const [testingUsers, setTestingUsers] = useState<string[]>([]);
+  const [newTestingEmail, setNewTestingEmail] = useState('');
   const ITEMS_PER_PAGE = 20;
 
   // Poll for pending tickets and show desktop notifications (agents only)
@@ -81,7 +83,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
         console.debug('No se pudieron cargar solicitudes pendientes', e);
       }
     };
-    if (activeTab === 'settings') loadPending();
+    const loadTestingUsers = async () => {
+      try {
+        const list = await storageService.fetchTestingUsers();
+        if (mounted) setTestingUsers(list.map(String));
+      } catch (e) {
+        console.debug('No se pudieron cargar usuarios testing', e);
+      }
+    };
+    if (activeTab === 'settings') {
+      loadPending();
+      loadTestingUsers();
+    }
     return () => { mounted = false; };
   }, [activeTab]);
 
@@ -135,7 +148,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
   ), [requests, searchTerm]);
 
   const waiting = filteredRequests.filter(r => r.status === 'waiting').sort((a, b) => {
-    const p = { high: 3, medium: 2, low: 1 };
+    const p = { urgent: 4, high: 3, medium: 2, low: 1 };
     return p[b.priority] - p[a.priority] || a.createdAt - b.createdAt;
   });
 
@@ -263,13 +276,6 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
             <input type="text" placeholder="Filtrar..." className="bg-transparent border-none outline-none text-xs font-bold w-full" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
           <div className="ml-3 flex items-center space-x-2">
-            <button
-              onClick={() => onToggleTestingMode && onToggleTestingMode()}
-              title="Activar/Desactivar Modo Testing (visual)"
-              className={`p-2 rounded-xl transition-all ${testingMode ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-            >
-              <span className="text-[10px] font-black uppercase tracking-wider">QA</span>
-            </button>
             <button onClick={() => setShowCreateTicket(true)} title="Crear Ticket Personal" className="p-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all"><Plus size={16} /></button>
             <button onClick={() => setViewMode('grid')} title="Vista en grilla" className={`p-2 rounded-xl ${viewMode === 'grid' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-400 hover:bg-gray-100'}`}><LayoutGrid size={16} /></button>
             <button onClick={() => setViewMode('standard')} title="Vista en tarjetas" className={`p-2 rounded-xl ${viewMode === 'standard' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-400 hover:bg-gray-100'}`}><List size={16} /></button>
@@ -502,6 +508,24 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
               </div>
             </div>
 
+            <div className="flex items-center justify-between mb-6 p-4 bg-red-50 rounded-2xl border border-red-100">
+              <div>
+                <p className="text-sm font-black text-red-800">Modo Testing (QA)</p>
+                <p className="text-xs text-red-600">Cuando está activo, la app opera en entorno QA y muestra badge rojo.</p>
+              </div>
+              <div>
+                <label className="inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="hidden"
+                    checked={testingMode}
+                    onChange={() => onToggleTestingMode && onToggleTestingMode()}
+                  />
+                  <span className={`w-12 h-6 inline-block rounded-full transition-colors ${testingMode ? 'bg-red-600' : 'bg-gray-300'}`}></span>
+                </label>
+              </div>
+            </div>
+
             <div className="mb-6 bg-gray-50 p-4 rounded-2xl border border-gray-100">
               <p className="text-sm font-black mb-2">Override local (QA)</p>
               <p className="text-xs text-gray-500 mb-3">Si Teams no provee el correo correctamente en QA, puedes forzar tu email localmente para probar como agente.</p>
@@ -516,6 +540,59 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                   } catch (e) { console.error(e); alert('No se pudo guardar en localStorage'); }
                 }} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-black">Guardar</button>
                 <button onClick={() => { try { localStorage.removeItem('localAgentEmail'); setLocalAgentEmail(''); if (typeof onRefreshAgents === 'function') onRefreshAgents(); } catch (e) {} }} className="bg-red-50 text-red-600 px-4 py-2 rounded-xl font-black">Quitar</button>
+              </div>
+            </div>
+
+            <div className="mb-6 bg-red-50 p-4 rounded-2xl border border-red-100">
+              <p className="text-sm font-black mb-2 text-red-800">Usuarios de Testing (auto QA)</p>
+              <p className="text-xs text-red-600 mb-3">Si un usuario de esta lista inicia sesión, la app operará automáticamente contra la base QA.</p>
+              <div className="flex items-center space-x-2 mb-3">
+                <input
+                  type="email"
+                  placeholder="usuario@dominio.com"
+                  value={newTestingEmail}
+                  onChange={e => setNewTestingEmail(e.target.value)}
+                  className="flex-1 bg-white border border-red-200 px-4 py-2 rounded-xl outline-none"
+                />
+                <button
+                  onClick={async () => {
+                    const email = newTestingEmail.trim().toLowerCase();
+                    if (!email || !email.includes('@')) {
+                      alert('Ingrese un email válido');
+                      return;
+                    }
+                    try {
+                      await storageService.addTestingUser(email);
+                      const updated = await storageService.fetchTestingUsers();
+                      setTestingUsers(updated.map(String));
+                      setNewTestingEmail('');
+                    } catch (e) {
+                      console.error(e);
+                      alert('No se pudo agregar el usuario testing');
+                    }
+                  }}
+                  className="bg-red-600 text-white px-4 py-2 rounded-xl font-black"
+                >Agregar</button>
+              </div>
+              <div className="space-y-2">
+                {testingUsers.length === 0 && <p className="text-xs text-red-500">No hay usuarios testing configurados.</p>}
+                {testingUsers.map(email => (
+                  <div key={email} className="flex items-center justify-between p-3 bg-white rounded-xl border border-red-100">
+                    <span className="text-sm font-bold text-gray-700">{email}</span>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await storageService.removeTestingUser(email);
+                          setTestingUsers(prev => prev.filter(e => e !== email));
+                        } catch (e) {
+                          console.error(e);
+                          alert('No se pudo quitar el usuario testing');
+                        }
+                      }}
+                      className="text-red-600 text-xs font-black px-3 py-1 rounded-lg bg-red-50 hover:bg-red-100"
+                    >Quitar</button>
+                  </div>
+                ))}
               </div>
             </div>
 

@@ -33,17 +33,29 @@ export default function usePendingNotifications(opts: Options = {}) {
     async function check() {
       console.debug('[notify] checking pending tickets...');
       try {
-        const appMode = (() => {
+        const appModeOverride = (() => {
           try {
-            const v = (localStorage.getItem('appMode') || '').toLowerCase();
-            return v === 'qa' ? 'qa' : 'prod';
+            const v = (localStorage.getItem('appModeOverride') || '').toLowerCase();
+            if (v === 'qa' || v === 'prod') return v;
+            return '';
           } catch (e) {
-            return 'prod';
+            return '';
           }
         })();
+        const userEmail = (() => {
+          try {
+            const v = (localStorage.getItem('currentUserId') || '').trim().toLowerCase();
+            return v && v.includes('@') ? v : '';
+          } catch (e) {
+            return '';
+          }
+        })();
+        const headers: Record<string, string> = {};
+        if (appModeOverride) headers['x-app-mode'] = appModeOverride;
+        if (userEmail) headers['x-user-email'] = userEmail;
         const resp = await fetch(apiUrl, {
           cache: 'no-store',
-          headers: { 'x-app-mode': appMode }
+          headers
         });
         if (!resp.ok) {
           console.debug('[notify] fetch failed', resp.status, resp.statusText);

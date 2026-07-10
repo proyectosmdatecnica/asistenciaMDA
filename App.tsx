@@ -23,6 +23,7 @@ const App: React.FC = () => {
   const [manualEmail, setManualEmail] = useState('');
   const [manualEmailError, setManualEmailError] = useState('');
   const [isTestingMode, setIsTestingMode] = useState(false);
+  const [effectiveMode, setEffectiveMode] = useState<'prod' | 'qa'>('prod');
   
   const prevWaitingCount = useRef(0);
 
@@ -33,6 +34,12 @@ const App: React.FC = () => {
         storageService.fetchAllRequests(),
         storageService.fetchAgents()
       ]);
+      try {
+        const mode = await storageService.fetchEffectiveMode();
+        setEffectiveMode(mode);
+      } catch (e) {
+        setEffectiveMode('prod');
+      }
       let agentDetails: AuthorizedAgent[] = [];
       try {
         agentDetails = await storageService.fetchAgentDetails();
@@ -125,6 +132,7 @@ const App: React.FC = () => {
 
             if (candidate && candidate !== 'undefined' && candidate !== 'null' && candidate !== 'user-guest') {
               setCurrentUserId(candidate);
+              try { localStorage.setItem('currentUserId', candidate.toLowerCase()); } catch (e) {}
               if (!currentUserName || currentUserName === 'Usuario Invitado') {
                 setCurrentUserName(context?.user?.displayName || candidate);
               }
@@ -168,11 +176,25 @@ const App: React.FC = () => {
     const key = currentUserId ? `testingMode:${currentUserId}` : 'testingMode';
     try {
       localStorage.setItem(key, String(isTestingMode));
-      localStorage.setItem('appMode', isTestingMode ? 'qa' : 'prod');
+      if (role === 'agent') {
+        localStorage.setItem('appModeOverride', isTestingMode ? 'qa' : 'prod');
+      } else {
+        localStorage.removeItem('appModeOverride');
+      }
     } catch (e) {
       // ignore storage errors
     }
-  }, [currentUserId, isTestingMode]);
+  }, [currentUserId, isTestingMode, role]);
+
+  useEffect(() => {
+    try {
+      if (currentUserId && currentUserId !== 'user-guest') {
+        localStorage.setItem('currentUserId', currentUserId.toLowerCase());
+      }
+    } catch (e) {
+      // ignore storage errors
+    }
+  }, [currentUserId]);
 
   // Ensure role is recalculated whenever current user or authorized agents list changes
   useEffect(() => {
@@ -357,6 +379,7 @@ const App: React.FC = () => {
                   return;
                 }
                 setCurrentUserId(email);
+                try { localStorage.setItem('currentUserId', email.toLowerCase()); } catch (e) {}
                 setCurrentUserName(email);
                 setManualEmailRequired(false);
                 await refreshData(true);
@@ -386,6 +409,7 @@ const App: React.FC = () => {
             averageWaitTime={stats.averageWaitTime}
             visibleAgents={visibleAgentsForUser}
             inProgressTickets={inProgressTickets}
+            effectiveMode={effectiveMode}
             onSubmit={handleCreateOrUpdate}
             onCancel={(id) => handleUpdateStatus(id, 'cancelled')}
           />

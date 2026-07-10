@@ -9,10 +9,60 @@ const sqlConfigStringProd = process.env.SqlConnectionString;
 const sqlConfigStringQa = process.env.SqlConnectionStringQA || process.env.SqlConnectionString_QA;
 let poolProd: sql.ConnectionPool | null = null;
 let poolQa: sql.ConnectionPool | null = null;
+let poolControl: sql.ConnectionPool | null = null;
 
-function resolveDbMode(req: HttpRequest): DbMode {
+async function getControlPool(context: InvocationContext) {
+    try {
+        if (poolControl && poolControl.connected) return poolControl;
+        if (!sqlConfigStringProd) throw new Error("SqlConnectionString no configurada.");
+        poolControl = await new sql.ConnectionPool(sqlConfigStringProd).connect();
+        return poolControl;
+    } catch (err: any) {
+        context.error("Control SQL Connection Error:", err.message);
+        poolControl = null;
+        throw err;
+    }
+}
+
+async function ensureTestingUsersTable(poolConnection: sql.ConnectionPool) {
+    await poolConnection.request().query(`
+        IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='testing_users' AND xtype='U')
+        BEGIN
+            CREATE TABLE testing_users (
+                email VARCHAR(255) PRIMARY KEY,
+                addedAt BIGINT NOT NULL,
+                addedBy VARCHAR(255) NULL
+            );
+        END
+    `);
+}
+
+async function isTestingUser(email: string, context: InvocationContext): Promise<boolean> {
+    if (!email || !email.includes('@')) return false;
+    try {
+        const controlPool = await getControlPool(context);
+        await ensureTestingUsersTable(controlPool);
+        const result = await controlPool.request()
+            .input('email', sql.VarChar, email.toLowerCase())
+            .query("SELECT TOP 1 email FROM testing_users WHERE email = @email");
+        return (result.recordset || []).length > 0;
+    } catch (err: any) {
+        context.warn('Could not resolve testing user mode', err?.message || err);
+        return false;
+    }
+}
+
+async function resolveDbMode(req: HttpRequest, context: InvocationContext): Promise<DbMode> {
     const raw = (req.headers.get('x-app-mode') || '').trim().toLowerCase();
     if (raw === 'qa' || raw === 'test' || raw === 'testing') return 'qa';
+    if (raw === 'prod' || raw === 'production') return 'prod';
+
+    const email = (req.headers.get('x-user-email') || '').trim().toLowerCase();
+    if (email) {
+        const testingUser = await isTestingUser(email, context);
+        if (testingUser) return 'qa';
+    }
+
     return 'prod';
 }
 
@@ -93,7 +143,7 @@ async function insertNotificationLog(
 export async function requestsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
     const method = req.method.toLowerCase();
     const id = req.params.id;
-    const dbMode = resolveDbMode(req);
+    const dbMode = await resolveDbMode(req, context);
 
     try {
         const poolConnection = await getPool(context, dbMode);
@@ -413,7 +463,7 @@ export async function requestsHandler(req: HttpRequest, context: InvocationConte
 // Handler de Agentes Autorizados
 export async function agentsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
     const method = req.method.toLowerCase();
-    const dbMode = resolveDbMode(req);
+    const dbMode = await resolveDbMode(req, context);
     try {
         const poolConnection = await getPool(context, dbMode);
 
@@ -528,9 +578,62 @@ export async function agentsHandler(req: HttpRequest, context: InvocationContext
 app.http('requests', { methods: ['GET', 'POST', 'PATCH'], authLevel: 'anonymous', route: 'requests/{id?}', handler: requestsHandler });
 app.http('agents', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', route: 'agents', handler: agentsHandler });
 
+// Testing users management (control list in prod DB)
+export async function testingUsersHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    const method = req.method.toLowerCase();
+    try {
+        const controlPool = await getControlPool(context);
+        await ensureTestingUsersTable(controlPool);
+
+        if (method === 'get') {
+            const result = await controlPool.request().query("SELECT email FROM testing_users ORDER BY email ASC");
+            return { status: 200, jsonBody: result.recordset.map(r => r.email) };
+        }
+
+        if (method === 'post') {
+            let body: any;
+            try { body = await req.json(); } catch (e) { return { status: 400, body: 'JSON malformado' }; }
+            const email = String(body?.email || '').trim().toLowerCase();
+            const addedBy = String(body?.addedBy || req.headers.get('x-user-email') || 'system').trim().toLowerCase();
+            if (!email || !email.includes('@')) return { status: 400, body: 'Email requerido' };
+
+            await controlPool.request()
+                .input('email', sql.VarChar, email)
+                .input('addedAt', sql.BigInt, Date.now())
+                .input('addedBy', sql.VarChar, addedBy)
+                .query(`
+                    IF EXISTS (SELECT 1 FROM testing_users WHERE email = @email)
+                    BEGIN
+                        UPDATE testing_users SET addedAt = @addedAt, addedBy = @addedBy WHERE email = @email
+                    END
+                    ELSE
+                    BEGIN
+                        INSERT INTO testing_users (email, addedAt, addedBy) VALUES (@email, @addedAt, @addedBy)
+                    END
+                `);
+
+            return { status: 200, jsonBody: { success: true } };
+        }
+
+        if (method === 'delete') {
+            const email = String(req.query.get('email') || '').trim().toLowerCase();
+            if (!email || !email.includes('@')) return { status: 400, body: 'Email requerido' };
+            await controlPool.request().input('email', sql.VarChar, email).query("DELETE FROM testing_users WHERE email = @email");
+            return { status: 200, jsonBody: { success: true } };
+        }
+
+        return { status: 405, body: 'Not Allowed' };
+    } catch (err:any) {
+        context.error('testingUsersHandler error', err.message);
+        return { status: 500, jsonBody: { error: err.message } };
+    }
+}
+
+app.http('testingUsers', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', route: 'testing-users', handler: testingUsersHandler });
+
 // Approve pending request
 export async function agentsApproveHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    const dbMode = resolveDbMode(req);
+    const dbMode = await resolveDbMode(req, context);
     try {
         const poolConnection = await getPool(context, dbMode);
         let body: any;
@@ -555,7 +658,7 @@ export async function agentsApproveHandler(req: HttpRequest, context: Invocation
 
 // Reject pending request
 export async function agentsRejectHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    const dbMode = resolveDbMode(req);
+    const dbMode = await resolveDbMode(req, context);
     try {
         const poolConnection = await getPool(context, dbMode);
         let body: any;
@@ -580,7 +683,7 @@ app.http('agentsReject', { methods: ['POST'], authLevel: 'anonymous', route: 'ag
 
 // Agent visibility in user dashboard
 export async function agentsVisibilityHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    const dbMode = resolveDbMode(req);
+    const dbMode = await resolveDbMode(req, context);
     try {
         if (req.method.toLowerCase() !== 'post') return { status: 405, body: 'Not Allowed' };
         const poolConnection = await getPool(context, dbMode);
@@ -620,7 +723,7 @@ app.http('agentsVisibility', { methods: ['POST'], authLevel: 'anonymous', route:
 
 // Agent settings: GET ?email=...  POST { email, notifyReminders }
 export async function agentsSettingsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    const dbMode = resolveDbMode(req);
+    const dbMode = await resolveDbMode(req, context);
     try {
         const poolConnection = await getPool(context, dbMode);
         if (req.method.toLowerCase() === 'get') {
@@ -799,7 +902,7 @@ app.http('sendActivityNotification', { methods: ['POST'], authLevel: 'anonymous'
 
 // Expose notification logs for debugging in Testing
 export async function notificationsLogsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    const dbMode = resolveDbMode(req);
+    const dbMode = await resolveDbMode(req, context);
     try {
         const poolConnection = await getPool(context, dbMode);
         const limit = parseInt(req.query.get('limit') || '50', 10);
@@ -813,9 +916,22 @@ export async function notificationsLogsHandler(req: HttpRequest, context: Invoca
 
 app.http('notificationsLogs', { methods: ['GET'], authLevel: 'anonymous', route: 'notifications/logs', handler: notificationsLogsHandler });
 
+// Returns the effective environment mode for current request context/user
+export async function environmentModeHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    try {
+        const mode = await resolveDbMode(req, context);
+        return { status: 200, jsonBody: { mode } };
+    } catch (err:any) {
+        context.error('environmentModeHandler error', err && err.message || err);
+        return { status: 500, jsonBody: { error: err && err.message || err } };
+    }
+}
+
+app.http('environmentMode', { methods: ['GET'], authLevel: 'anonymous', route: 'environment/mode', handler: environmentModeHandler });
+
 // Stats handler: computes average and median wait (minutes) over recent window and caches in DB
 export async function statsHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    const dbMode = resolveDbMode(req);
+    const dbMode = await resolveDbMode(req, context);
     try {
         const poolConnection = await getPool(context, dbMode);
 
