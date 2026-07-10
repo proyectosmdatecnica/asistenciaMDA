@@ -855,18 +855,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
         </div>
       ) : (
         /* Historial Table */
-        <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm animate-in fade-in">
-           <table className="w-full text-left text-xs border-collapse table-fixed">
+        <div className="bg-white rounded-[2rem] border border-gray-100 overflow-x-auto shadow-sm animate-in fade-in">
+           <table className="w-full text-left text-xs border-collapse table-auto">
                 <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
-                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-28 cursor-pointer" onClick={() => toggleHistorySort('id')}>ID{getSortLabel('id')}</th>
-                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-56 cursor-pointer" onClick={() => toggleHistorySort('userName')}>Usuario{getSortLabel('userName')}</th>
-                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-1/2 cursor-pointer" onClick={() => toggleHistorySort('subject')}>Asunto{getSortLabel('subject')}</th>
-                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-56 cursor-pointer" onClick={() => toggleHistorySort('agentName')}>Agente{getSortLabel('agentName')}</th>
+                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-24 cursor-pointer" onClick={() => toggleHistorySort('id')}>ID{getSortLabel('id')}</th>
+                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-48 cursor-pointer" onClick={() => toggleHistorySort('userName')}>Usuario{getSortLabel('userName')}</th>
+                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-[28%] min-w-[220px] cursor-pointer" onClick={() => toggleHistorySort('subject')}>Asunto{getSortLabel('subject')}</th>
+                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-28 cursor-pointer" onClick={() => toggleHistorySort('agentName')}>Agente{getSortLabel('agentName')}</th>
                     <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-44 cursor-pointer" onClick={() => toggleHistorySort('createdAt')}>Creado{getSortLabel('createdAt')}</th>
                     <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-44 cursor-pointer" onClick={() => toggleHistorySort('completedAt')}>Cierre{getSortLabel('completedAt')}</th>
                     <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-28 cursor-pointer" onClick={() => toggleHistorySort('status')}>Estado{getSortLabel('status')}</th>
-                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-36">Acciones</th>
+                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-44 sticky right-0 z-20 bg-gray-50">Acciones</th>
                   </tr>
                   <tr className="bg-white border-b border-gray-100">
                     <th className="p-2">
@@ -924,11 +924,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                   const startIdx = (historyPage - 1) * ITEMS_PER_PAGE;
                   const endIdx = startIdx + ITEMS_PER_PAGE;
                   return historyRows.slice(startIdx, endIdx).map(req => (
-                    <tr key={req.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => setSelectedRequest(req)}>
+                    <tr key={req.id} className="group hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => setSelectedRequest(req)}>
                       <td className="p-4 font-black text-gray-900">{req.id}</td>
                       <td className="p-4 font-black text-gray-900">{req.userName}</td>
                       <td className="p-4 font-bold text-gray-600">
-                        <div className="relative group max-w-[28rem]">
+                        <div className="relative max-w-[20rem] xl:max-w-[28rem]">
                           <span className="block truncate hover:underline">{req.subject}</span>
                           <div className="hidden group-hover:block absolute left-0 top-full mt-2 z-50 w-[min(60vw,40rem)] max-h-[35vh] overflow-auto bg-white p-3 rounded-lg shadow-lg border border-gray-100 text-sm text-gray-700 whitespace-pre-wrap">
                             {(req.description && req.description.length > 0) ? `${req.subject} — ${req.description}` : req.subject}
@@ -954,7 +954,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                           {statusLabel(req.status).toUpperCase()}
                         </span>
                       </td>
-                      <td className="p-4 w-44">
+                      <td className="p-4 w-44 sticky right-0 z-10 bg-white group-hover:bg-gray-50 whitespace-nowrap">
                         <div className="flex items-center space-x-2">
                           <button
                             onClick={(e) => { e.stopPropagation(); setSelectedRequest(req); }}
