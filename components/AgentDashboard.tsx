@@ -375,6 +375,14 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
     }
   };
 
+  const shortAgentName = (agentName?: string) => {
+    if (!agentName) return '-';
+    const raw = String(agentName).trim();
+    if (!raw) return '-';
+    if (raw.includes('@')) return raw.split('@')[0];
+    return raw;
+  };
+
   const renderDetailModal = () => {
     if (!selectedRequest) return null;
     return (
@@ -513,7 +521,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       <td className="p-3 text-sm font-black">
                         <span className={`text-[9px] px-2 py-1 rounded ${req.status === 'waiting' ? 'bg-amber-50 text-amber-600' : req.status === 'in-progress' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>{statusLabel(req.status)}</span>
                       </td>
-                      <td className="p-3 text-sm text-indigo-600 font-black">{req.agentName || '-'}</td>
+                      <td className="p-3 text-sm text-indigo-600 font-black" title={req.agentName || '-'}>
+                        <span className="block truncate max-w-[9rem]">{shortAgentName(req.agentName)}</span>
+                      </td>
                       <td className="p-3 text-sm text-gray-500">{new Date(Number(req.createdAt)).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
                       <td className="p-3 text-sm text-gray-500">{renderElapsedFor(req)}</td>
                       <td className="p-3 text-sm">
@@ -925,7 +935,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                           </div>
                         </div>
                       </td>
-                      <td className="p-4 font-black text-indigo-600">{req.agentName || '-'}</td>
+                      <td className="p-4 font-black text-indigo-600" title={req.agentName || '-'}>
+                        <span className="block truncate max-w-[9rem]">{shortAgentName(req.agentName)}</span>
+                      </td>
                       <td className="p-4 text-gray-500">{req.createdAt ? new Date(Number(req.createdAt)).toLocaleString('es-ES', {
                         day: '2-digit', month: '2-digit', year: 'numeric',
                         hour: '2-digit', minute: '2-digit'
