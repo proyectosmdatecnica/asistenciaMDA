@@ -9,7 +9,7 @@ import { storageService } from '../services/dataService';
 interface AgentDashboardProps {
   requests: SupportRequest[];
   stats: QueueStats;
-  onUpdateStatus: (id: string, newStatus: SupportRequest['status'], extraData?: Partial<SupportRequest>) => void;
+  onUpdateStatus: (id: string, newStatus: SupportRequest['status'], extraData?: Partial<SupportRequest>) => void | Promise<void>;
   agents: string[];
   agentDetails: AuthorizedAgent[];
   onManageAgent: (action: 'add' | 'remove', email: string) => void;
@@ -32,6 +32,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
   const [selectedRequest, setSelectedRequest] = useState<SupportRequest | null>(null);
   const [historyPage, setHistoryPage] = useState(1);
   const [showCreateTicket, setShowCreateTicket] = useState(false);
+  const [showCloseModal, setShowCloseModal] = useState(false);
+  const [closeModalRequest, setCloseModalRequest] = useState<SupportRequest | null>(null);
+  const [closeModalStatus, setCloseModalStatus] = useState<'completed' | 'cancelled'>('completed');
+  const [closeCommentDraft, setCloseCommentDraft] = useState('');
+  const [isSubmittingClose, setIsSubmittingClose] = useState(false);
   const [ticketSubject, setTicketSubject] = useState('');
   const [ticketDescription, setTicketDescription] = useState('');
   const [ticketPriority, setTicketPriority] = useState<SupportRequest['priority']>('medium');
@@ -289,10 +294,23 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
   };
 
   const handleCloseTicket = (req: SupportRequest, status: 'completed' | 'cancelled') => {
-    const response = window.prompt('Comentario de cierre (opcional):', req.closeComment || '');
-    if (response === null) return;
-    const closeComment = response.trim();
-    onUpdateStatus(req.id, status, { closeComment });
+    setCloseModalRequest(req);
+    setCloseModalStatus(status);
+    setCloseCommentDraft(req.closeComment || '');
+    setShowCloseModal(true);
+  };
+
+  const submitCloseTicket = async () => {
+    if (!closeModalRequest) return;
+    setIsSubmittingClose(true);
+    try {
+      await Promise.resolve(onUpdateStatus(closeModalRequest.id, closeModalStatus, { closeComment: closeCommentDraft.trim() }));
+      setShowCloseModal(false);
+      setCloseModalRequest(null);
+      setCloseCommentDraft('');
+    } finally {
+      setIsSubmittingClose(false);
+    }
   };
 
   const getElapsedTime = (t: number) => {
@@ -943,6 +961,50 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
       )}
     </div>
     {renderDetailModal()}
+
+    {showCloseModal && closeModalRequest && (
+      <div className="fixed inset-0 z-60 flex items-center justify-center">
+        <div onClick={() => !isSubmittingClose && setShowCloseModal(false)} className="absolute inset-0 bg-black/40" />
+        <div className="relative z-70 w-[min(95vw,640px)] bg-white rounded-3xl shadow-2xl border border-gray-100 p-7">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h3 className="text-lg font-black text-gray-900">
+                {closeModalStatus === 'completed' ? 'Cerrar como Resuelto' : 'Cerrar como Cancelado'}
+              </h3>
+              <p className="text-xs text-gray-500 mt-1">{closeModalRequest.id} - {closeModalRequest.subject}</p>
+            </div>
+            <button disabled={isSubmittingClose} onClick={() => setShowCloseModal(false)} className="text-gray-400 hover:text-gray-700 disabled:opacity-50"><X size={18} /></button>
+          </div>
+
+          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Comentario de cierre (opcional)</label>
+          <textarea
+            value={closeCommentDraft}
+            onChange={e => setCloseCommentDraft(e.target.value)}
+            rows={4}
+            placeholder="Ej: Se reinició el servicio y el usuario confirmó funcionamiento."
+            className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 focus:border-indigo-600 rounded-2xl font-bold text-sm outline-none resize-none"
+          />
+
+          <div className="pt-4 flex items-center space-x-3">
+            <button
+              type="button"
+              disabled={isSubmittingClose}
+              onClick={submitCloseTicket}
+              className={`flex-1 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center space-x-2 ${closeModalStatus === 'completed' ? 'bg-emerald-600 hover:enabled:bg-emerald-700' : 'bg-red-600 hover:enabled:bg-red-700'} disabled:opacity-50`}
+            >
+              {isSubmittingClose ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+              <span>{isSubmittingClose ? 'Guardando...' : 'Confirmar cierre'}</span>
+            </button>
+            <button
+              type="button"
+              disabled={isSubmittingClose}
+              onClick={() => setShowCloseModal(false)}
+              className="px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest text-gray-600 bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+            >Cancelar</button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* Modal Crear Ticket Personal */}
     {showCreateTicket && (

@@ -254,9 +254,15 @@ const App: React.FC = () => {
 
   const handleUpdateStatus = useCallback(async (id: string, newStatus: SupportRequest['status'], extraData: Partial<SupportRequest> = {}) => {
     setIsSyncing(true);
-    const agentData = (newStatus === 'in-progress' || newStatus === 'paused') ? { agentId: currentUserId, agentName: currentUserName } : {};
-    if (await storageService.updateRequestStatus(id, newStatus, { ...agentData, ...extraData })) refreshData(true);
-    setIsSyncing(false);
+    try {
+      const agentData = (newStatus === 'in-progress' || newStatus === 'paused') ? { agentId: currentUserId, agentName: currentUserName } : {};
+      if (await storageService.updateRequestStatus(id, newStatus, { ...agentData, ...extraData })) refreshData(true);
+    } catch (e: any) {
+      console.error('Error actualizando estado del ticket', e);
+      alert(e?.message || 'No se pudo actualizar el estado del ticket.');
+    } finally {
+      setIsSyncing(false);
+    }
   }, [currentUserId, currentUserName, refreshData]);
 
   const handleAgentManagement = async (action: 'add' | 'remove', email: string) => {
