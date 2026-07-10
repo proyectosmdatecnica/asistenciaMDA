@@ -2,7 +2,7 @@
 {
   "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
   "manifestVersion": "1.16",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "webApplicationInfo": {
     "id": "677cde6e-86b1-4849-9ebc-c9b750ddbc73",
     "resource": "api://677cde6e-86b1-4849-9ebc-c9b750ddbc73"
@@ -27,13 +27,22 @@
     "short": "Gestión de cola para soporte técnico.",
     "full": "Aplicación para gestionar solicitudes de soporte técnico interno con tiempos de espera y triaje automático."
   },
+  "activities": {
+    "activityTypes": [
+      {
+        "type": "newRequest",
+        "description": "Nuevo ticket en Asistencia MDA",
+        "templateText": "{actor} creó el ticket {requestId}: {summary}"
+      }
+    ]
+  },
   "accentColor": "#5b5fc7",
   "staticTabs": [
     {
       "entityId": "supportTab",
       "name": "Cola de Tickets MDA Tecnica",
-      "contentUrl": "https://black-pond-084e07c0f-12.eastus2.1.azurestaticapps.net/",
-      "websiteUrl": "https://black-pond-084e07c0f-12.eastus2.1.azurestaticapps.net/",
+      "contentUrl": "https://black-pond-084e07c0f-15.eastus2.1.azurestaticapps.net/",
+      "websiteUrl": "https://black-pond-084e07c0f-15.eastus2.1.azurestaticapps.net/",
       "scopes": ["personal", "team", "groupChat"]
     }
   ],
@@ -43,7 +52,7 @@
     "messageTeamMembers"
   ],
   "validDomains": [
-    "black-pond-084e07c0f-12.eastus2.1.azurestaticapps.net",
+    "black-pond-084e07c0f-15.eastus2.1.azurestaticapps.net",
     "*.azurestaticapps.net"
   ]
 }

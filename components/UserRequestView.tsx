@@ -8,6 +8,7 @@ interface UserRequestViewProps {
   averageWaitTime: number;
   visibleAgents: Array<{ name: string; email: string }>;
   inProgressTickets: Array<{ id: string; subject?: string; agentName?: string }>;
+  effectiveMode?: 'prod' | 'qa';
   onSubmit: (request: Partial<SupportRequest>, id?: string) => void;
   onCancel: (id: string) => void;
 }
@@ -19,7 +20,7 @@ const IT_TIPS = [
   "Si algo no carga, prueba borrar el caché."
 ];
 
-const UserRequestView: React.FC<UserRequestViewProps> = ({ activeRequests, queuePosition, averageWaitTime, visibleAgents, inProgressTickets, onSubmit, onCancel }) => {
+const UserRequestView: React.FC<UserRequestViewProps> = ({ activeRequests, queuePosition, averageWaitTime, visibleAgents, inProgressTickets, effectiveMode = 'prod', onSubmit, onCancel }) => {
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<SupportRequest['priority']>('medium');
@@ -72,7 +73,14 @@ const UserRequestView: React.FC<UserRequestViewProps> = ({ activeRequests, queue
   return (
     <div className="max-w-2xl mx-auto pt-6">
       <div className="mb-8 flex justify-between items-center">
-        <h1 className="text-3xl font-black text-gray-900">Mis Solicitudes</h1>
+        <div className="flex items-center space-x-3">
+          <h1 className="text-3xl font-black text-gray-900">Mis Solicitudes</h1>
+          {effectiveMode === 'qa' && (
+            <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded bg-red-100 text-red-700 border border-red-200">
+              Entorno QA
+            </span>
+          )}
+        </div>
         {!showForm && (
           <button onClick={() => setShowForm(true)} className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center space-x-2">
             <Plus size={16} /><span>Nuevo Ticket</span>

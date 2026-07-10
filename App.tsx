@@ -22,6 +22,8 @@ const App: React.FC = () => {
   const [manualEmailRequired, setManualEmailRequired] = useState(false);
   const [manualEmail, setManualEmail] = useState('');
   const [manualEmailError, setManualEmailError] = useState('');
+  const [isTestingMode, setIsTestingMode] = useState(false);
+  const [effectiveMode, setEffectiveMode] = useState<'prod' | 'qa'>('prod');
   
   const prevWaitingCount = useRef(0);
 
@@ -32,6 +34,12 @@ const App: React.FC = () => {
         storageService.fetchAllRequests(),
         storageService.fetchAgents()
       ]);
+      try {
+        const mode = await storageService.fetchEffectiveMode();
+        setEffectiveMode(mode);
+      } catch (e) {
+        setEffectiveMode('prod');
+      }
       let agentDetails: AuthorizedAgent[] = [];
       try {
         agentDetails = await storageService.fetchAgentDetails();
@@ -39,10 +47,7 @@ const App: React.FC = () => {
         agentDetails = [];
       }
       
-      // include any local fallback agent stored in localStorage
-      const localAgent = (localStorage.getItem('localAgentEmail') || '').toLowerCase();
       const mergedAgents = Array.isArray(agents) ? [...agents.map((a:any) => String(a).toLowerCase())] : [];
-      if (localAgent && !mergedAgents.includes(localAgent)) mergedAgents.push(localAgent);
       setAuthorizedAgents(mergedAgents);
       setAuthorizedAgentDetails(agentDetails);
       console.debug('[app] fetched authorizedAgents:', agents);
@@ -124,6 +129,7 @@ const App: React.FC = () => {
 
             if (candidate && candidate !== 'undefined' && candidate !== 'null' && candidate !== 'user-guest') {
               setCurrentUserId(candidate);
+              try { localStorage.setItem('currentUserId', candidate.toLowerCase()); } catch (e) {}
               if (!currentUserName || currentUserName === 'Usuario Invitado') {
                 setCurrentUserName(context?.user?.displayName || candidate);
               }
@@ -153,11 +159,44 @@ const App: React.FC = () => {
     }
   }, [isTeamsReady, currentUserId, refreshData]);
 
+  useEffect(() => {
+    const key = currentUserId ? `testingMode:${currentUserId}` : 'testingMode';
+    try {
+      const stored = localStorage.getItem(key);
+      setIsTestingMode(stored === 'true');
+    } catch (e) {
+      setIsTestingMode(false);
+    }
+  }, [currentUserId]);
+
+  useEffect(() => {
+    const key = currentUserId ? `testingMode:${currentUserId}` : 'testingMode';
+    try {
+      localStorage.setItem(key, String(isTestingMode));
+      if (role === 'agent') {
+        localStorage.setItem('appModeOverride', isTestingMode ? 'qa' : 'prod');
+      } else {
+        localStorage.removeItem('appModeOverride');
+      }
+    } catch (e) {
+      // ignore storage errors
+    }
+  }, [currentUserId, isTestingMode, role]);
+
+  useEffect(() => {
+    try {
+      if (currentUserId && currentUserId !== 'user-guest') {
+        localStorage.setItem('currentUserId', currentUserId.toLowerCase());
+      }
+    } catch (e) {
+      // ignore storage errors
+    }
+  }, [currentUserId]);
+
   // Ensure role is recalculated whenever current user or authorized agents list changes
   useEffect(() => {
     const normalized = currentUserId.toLowerCase();
-    const localAgentEmail = (localStorage.getItem('localAgentEmail') || '').toLowerCase();
-    const isAgent = authorizedAgents.some((a)=> a.toLowerCase() === normalized || a.toLowerCase() === localAgentEmail);
+    const isAgent = authorizedAgents.some((a)=> a.toLowerCase() === normalized);
     setRole(isAgent ? 'agent' : 'user');
   }, [authorizedAgents, currentUserId]);
 
@@ -213,11 +252,17 @@ const App: React.FC = () => {
     setIsSyncing(false);
   }, [currentUserId, currentUserName, refreshData]);
 
-  const handleUpdateStatus = useCallback(async (id: string, newStatus: SupportRequest['status']) => {
+  const handleUpdateStatus = useCallback(async (id: string, newStatus: SupportRequest['status'], extraData: Partial<SupportRequest> = {}) => {
     setIsSyncing(true);
-    const agentData = (newStatus === 'in-progress' || newStatus === 'paused') ? { agentId: currentUserId, agentName: currentUserName } : {};
-    if (await storageService.updateRequestStatus(id, newStatus, agentData)) refreshData(true);
-    setIsSyncing(false);
+    try {
+      const agentData = (newStatus === 'in-progress' || newStatus === 'paused') ? { agentId: currentUserId, agentName: currentUserName } : {};
+      if (await storageService.updateRequestStatus(id, newStatus, { ...agentData, ...extraData })) refreshData(true);
+    } catch (e: any) {
+      console.error('Error actualizando estado del ticket', e);
+      alert(e?.message || 'No se pudo actualizar el estado del ticket.');
+    } finally {
+      setIsSyncing(false);
+    }
   }, [currentUserId, currentUserName, refreshData]);
 
   const handleAgentManagement = async (action: 'add' | 'remove', email: string) => {
@@ -305,7 +350,7 @@ const App: React.FC = () => {
   if (!isTeamsReady) return <div className="h-screen w-full flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-[#5b5fc7]" size={40} /></div>;
 
   return (
-    <Layout role={role} onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')} onOpenHelp={() => setIsHelpOpen(true)} onAgentRegister={handleAgentRegistered}>
+    <Layout role={role} testingMode={isTestingMode} onSwitchRole={() => setRole(role === 'user' ? 'agent' : 'user')} onOpenHelp={() => setIsHelpOpen(true)} onAgentRegister={handleAgentRegistered}>
       <div className="relative min-h-full pb-20">
         <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-3 bg-white px-5 py-3 rounded-full shadow-2xl border border-gray-100 text-[11px] font-black group transition-all">
           <div className="relative">
@@ -336,6 +381,7 @@ const App: React.FC = () => {
                   return;
                 }
                 setCurrentUserId(email);
+                try { localStorage.setItem('currentUserId', email.toLowerCase()); } catch (e) {}
                 setCurrentUserName(email);
                 setManualEmailRequired(false);
                 await refreshData(true);
@@ -354,6 +400,8 @@ const App: React.FC = () => {
             onToggleAgentVisibility={handleToggleAgentVisibility}
             onRefreshAgents={refreshData}
             currentUserId={currentUserId}
+            testingMode={isTestingMode}
+            onToggleTestingMode={() => setIsTestingMode(v => !v)}
             onCreateTicket={handleCreateOrUpdate}
           />
         ) : (
@@ -363,6 +411,7 @@ const App: React.FC = () => {
             averageWaitTime={stats.averageWaitTime}
             visibleAgents={visibleAgentsForUser}
             inProgressTickets={inProgressTickets}
+            effectiveMode={effectiveMode}
             onSubmit={handleCreateOrUpdate}
             onCancel={(id) => handleUpdateStatus(id, 'cancelled')}
           />

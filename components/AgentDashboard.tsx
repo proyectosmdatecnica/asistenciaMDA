@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { SupportRequest, QueueStats, AuthorizedAgent } from '../types';
 import { 
-  Clock, CheckCircle, Search, Zap, List, LayoutGrid, Settings, Plus, Trash2, Activity, MessageCircle, RotateCcw, XCircle, Pause, Play, X, Send, Loader2
+  Clock, CheckCircle, Search, Zap, List, LayoutGrid, Settings, Plus, Trash2, Activity, MessageCircle, RotateCcw, XCircle, Pause, Play, X, Send, Loader2, Eye
 } from 'lucide-react';
 import usePendingNotifications from '../hooks/usePendingNotifications';
 import { storageService } from '../services/dataService';
@@ -9,7 +9,7 @@ import { storageService } from '../services/dataService';
 interface AgentDashboardProps {
   requests: SupportRequest[];
   stats: QueueStats;
-  onUpdateStatus: (id: string, newStatus: SupportRequest['status']) => void;
+  onUpdateStatus: (id: string, newStatus: SupportRequest['status'], extraData?: Partial<SupportRequest>) => void | Promise<void>;
   agents: string[];
   agentDetails: AuthorizedAgent[];
   onManageAgent: (action: 'add' | 'remove', email: string) => void;
@@ -17,9 +17,11 @@ interface AgentDashboardProps {
   onRefreshAgents?: () => Promise<void>;
   currentUserId?: string;
   onCreateTicket?: (request: Partial<SupportRequest>) => void;
+  testingMode?: boolean;
+  onToggleTestingMode?: () => void;
 }
 
-const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpdateStatus, agents, agentDetails, onManageAgent, onToggleAgentVisibility, onRefreshAgents, currentUserId, onCreateTicket }) => {
+const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpdateStatus, agents, agentDetails, onManageAgent, onToggleAgentVisibility, onRefreshAgents, currentUserId, onCreateTicket, testingMode = false, onToggleTestingMode }) => {
   const [now, setNow] = useState(Date.now());
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'queue' | 'history' | 'settings'>('queue');
@@ -27,15 +29,43 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
   const [newAgentEmail, setNewAgentEmail] = useState('');
   const [pendingRequests, setPendingRequests] = useState<string[]>([]);
   const [notifyEnabled, setNotifyEnabled] = useState<boolean>(true);
-  const [localAgentEmail, setLocalAgentEmail] = useState<string>('');
   const [selectedRequest, setSelectedRequest] = useState<SupportRequest | null>(null);
   const [historyPage, setHistoryPage] = useState(1);
   const [showCreateTicket, setShowCreateTicket] = useState(false);
+  const [showCloseModal, setShowCloseModal] = useState(false);
+  const [closeModalRequest, setCloseModalRequest] = useState<SupportRequest | null>(null);
+  const [closeModalStatus, setCloseModalStatus] = useState<'completed' | 'cancelled'>('completed');
+  const [closeCommentDraft, setCloseCommentDraft] = useState('');
+  const [isSubmittingClose, setIsSubmittingClose] = useState(false);
   const [ticketSubject, setTicketSubject] = useState('');
   const [ticketDescription, setTicketDescription] = useState('');
   const [ticketPriority, setTicketPriority] = useState<SupportRequest['priority']>('medium');
   const [isCreatingTicket, setIsCreatingTicket] = useState(false);
+  const [testingUsers, setTestingUsers] = useState<string[]>([]);
+  const [newTestingEmail, setNewTestingEmail] = useState('');
+  const [historyFilters, setHistoryFilters] = useState({
+    id: '',
+    userName: '',
+    subject: '',
+    agentName: '',
+    status: '' as '' | 'completed' | 'cancelled'
+  });
+  const [historyMatchMode, setHistoryMatchMode] = useState({
+    id: 'contains' as 'contains' | 'startsWith',
+    userName: 'contains' as 'contains' | 'startsWith',
+    subject: 'contains' as 'contains' | 'startsWith',
+    agentName: 'contains' as 'contains' | 'startsWith'
+  });
+  const [historySort, setHistorySort] = useState<{ key: 'id' | 'userName' | 'subject' | 'agentName' | 'createdAt' | 'completedAt' | 'status'; dir: 'asc' | 'desc' }>({
+    key: 'completedAt',
+    dir: 'desc'
+  });
   const ITEMS_PER_PAGE = 20;
+
+  const historyStateKey = useMemo(
+    () => currentUserId ? `agentHistoryState:${currentUserId.toLowerCase()}` : 'agentHistoryState:guest',
+    [currentUserId]
+  );
 
   // Poll for pending tickets and show desktop notifications (agents only)
   usePendingNotifications({ pollIntervalMs: 30000, apiUrl: '/api/requests', reminderIntervalMs: 5 * 60 * 1000, currentUserId });
@@ -79,7 +109,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
         console.debug('No se pudieron cargar solicitudes pendientes', e);
       }
     };
-    if (activeTab === 'settings') loadPending();
+    const loadTestingUsers = async () => {
+      try {
+        const list = await storageService.fetchTestingUsers();
+        if (mounted) setTestingUsers(list.map(String));
+      } catch (e) {
+        console.debug('No se pudieron cargar usuarios testing', e);
+      }
+    };
+    if (activeTab === 'settings') {
+      loadPending();
+      loadTestingUsers();
+    }
     return () => { mounted = false; };
   }, [activeTab]);
 
@@ -113,13 +154,56 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
   }, [currentUserId]);
 
   useEffect(() => {
+    setHistoryPage(1);
+  }, [historyFilters, historySort]);
+
+  useEffect(() => {
     try {
-      const v = localStorage.getItem('localAgentEmail') || '';
-      setLocalAgentEmail(v);
+      const raw = sessionStorage.getItem(historyStateKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed?.filters) {
+        setHistoryFilters((prev) => ({
+          ...prev,
+          id: typeof parsed.filters.id === 'string' ? parsed.filters.id : prev.id,
+          userName: typeof parsed.filters.userName === 'string' ? parsed.filters.userName : prev.userName,
+          subject: typeof parsed.filters.subject === 'string' ? parsed.filters.subject : prev.subject,
+          agentName: typeof parsed.filters.agentName === 'string' ? parsed.filters.agentName : prev.agentName,
+          status: parsed.filters.status === 'completed' || parsed.filters.status === 'cancelled' ? parsed.filters.status : ''
+        }));
+      }
+      if (parsed?.matchMode) {
+        setHistoryMatchMode((prev) => ({
+          ...prev,
+          id: parsed.matchMode.id === 'startsWith' ? 'startsWith' : 'contains',
+          userName: parsed.matchMode.userName === 'startsWith' ? 'startsWith' : 'contains',
+          subject: parsed.matchMode.subject === 'startsWith' ? 'startsWith' : 'contains',
+          agentName: parsed.matchMode.agentName === 'startsWith' ? 'startsWith' : 'contains'
+        }));
+      }
+      if (parsed?.sort?.key && parsed?.sort?.dir) {
+        const validKey = ['id', 'userName', 'subject', 'agentName', 'createdAt', 'completedAt', 'status'].includes(parsed.sort.key);
+        const validDir = parsed.sort.dir === 'asc' || parsed.sort.dir === 'desc';
+        if (validKey && validDir) {
+          setHistorySort({ key: parsed.sort.key, dir: parsed.sort.dir });
+        }
+      }
     } catch (e) {
-      setLocalAgentEmail('');
+      // ignore parse/session errors
     }
-  }, []);
+  }, [historyStateKey]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(historyStateKey, JSON.stringify({
+        filters: historyFilters,
+        matchMode: historyMatchMode,
+        sort: historySort
+      }));
+    } catch (e) {
+      // ignore session storage errors
+    }
+  }, [historyStateKey, historyFilters, historyMatchMode, historySort]);
 
   const openTeamsChat = (userId: string, ticketId: string) => {
     const message = encodeURIComponent(`Hola! Te contacto por el Ticket numero ${ticketId}`);
@@ -133,12 +217,101 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
   ), [requests, searchTerm]);
 
   const waiting = filteredRequests.filter(r => r.status === 'waiting').sort((a, b) => {
-    const p = { high: 3, medium: 2, low: 1 };
+    const p = { urgent: 4, high: 3, medium: 2, low: 1 };
     return p[b.priority] - p[a.priority] || a.createdAt - b.createdAt;
   });
 
   const inProgress = filteredRequests.filter(r => r.status === 'in-progress');
   const completed = filteredRequests.filter(r => r.status === 'completed' || r.status === 'cancelled');
+
+  const historyRows = useMemo(() => {
+    const matchesByMode = (value: string, query: string, mode: 'contains' | 'startsWith') => {
+      if (!query) return true;
+      const v = (value || '').toLowerCase();
+      const q = query.toLowerCase();
+      return mode === 'startsWith' ? v.startsWith(q) : v.includes(q);
+    };
+
+    const normalized = completed.filter((r) => {
+      const id = String(r.id || '').toLowerCase();
+      const userName = String(r.userName || '').toLowerCase();
+      const subject = String(r.subject || '').toLowerCase();
+      const agentName = String(r.agentName || '').toLowerCase();
+      const status = String(r.status || '').toLowerCase();
+      if (!matchesByMode(id, historyFilters.id, historyMatchMode.id)) return false;
+      if (!matchesByMode(userName, historyFilters.userName, historyMatchMode.userName)) return false;
+      if (!matchesByMode(subject, historyFilters.subject, historyMatchMode.subject)) return false;
+      if (!matchesByMode(agentName, historyFilters.agentName, historyMatchMode.agentName)) return false;
+      if (historyFilters.status && status !== historyFilters.status) return false;
+      return true;
+    });
+
+    const sorted = [...normalized].sort((a, b) => {
+      const dir = historySort.dir === 'asc' ? 1 : -1;
+      if (historySort.key === 'createdAt' || historySort.key === 'completedAt') {
+        const av = Number(a[historySort.key] || 0);
+        const bv = Number(b[historySort.key] || 0);
+        return (av - bv) * dir;
+      }
+      const av = String((a as any)[historySort.key] || '').toLowerCase();
+      const bv = String((b as any)[historySort.key] || '').toLowerCase();
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
+    });
+
+    return sorted;
+  }, [completed, historyFilters, historyMatchMode, historySort]);
+
+  const toggleHistorySort = (key: 'id' | 'userName' | 'subject' | 'agentName' | 'createdAt' | 'completedAt' | 'status') => {
+    setHistorySort((prev) => {
+      if (prev.key === key) {
+        return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' };
+      }
+      return { key, dir: 'asc' };
+    });
+  };
+
+  const getSortLabel = (key: 'id' | 'userName' | 'subject' | 'agentName' | 'createdAt' | 'completedAt' | 'status') => {
+    if (historySort.key !== key) return '';
+    return historySort.dir === 'asc' ? ' ▲' : ' ▼';
+  };
+
+  const resetHistoryFilters = () => {
+    setHistoryFilters({
+      id: '',
+      userName: '',
+      subject: '',
+      agentName: '',
+      status: ''
+    });
+    setHistoryMatchMode({
+      id: 'contains',
+      userName: 'contains',
+      subject: 'contains',
+      agentName: 'contains'
+    });
+  };
+
+  const handleCloseTicket = (req: SupportRequest, status: 'completed' | 'cancelled') => {
+    setCloseModalRequest(req);
+    setCloseModalStatus(status);
+    setCloseCommentDraft(req.closeComment || '');
+    setShowCloseModal(true);
+  };
+
+  const submitCloseTicket = async () => {
+    if (!closeModalRequest) return;
+    setIsSubmittingClose(true);
+    try {
+      await Promise.resolve(onUpdateStatus(closeModalRequest.id, closeModalStatus, { closeComment: closeCommentDraft.trim() }));
+      setShowCloseModal(false);
+      setCloseModalRequest(null);
+      setCloseCommentDraft('');
+    } finally {
+      setIsSubmittingClose(false);
+    }
+  };
 
   const getElapsedTime = (t: number) => {
     const s = Math.floor((now - t) / 1000);
@@ -202,6 +375,14 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
     }
   };
 
+  const shortAgentName = (agentName?: string) => {
+    if (!agentName) return '-';
+    const raw = String(agentName).trim();
+    if (!raw) return '-';
+    if (raw.includes('@')) return raw.split('@')[0];
+    return raw;
+  };
+
   const renderDetailModal = () => {
     if (!selectedRequest) return null;
     return (
@@ -218,11 +399,44 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
               <button onClick={() => setSelectedRequest(null)} className="text-gray-400 hover:text-gray-700">Cerrar</button>
             </div>
           </div>
-          <div className="prose max-w-none text-sm text-gray-700 whitespace-pre-wrap mb-4">{selectedRequest.description || 'Sin descripción adicional.'}</div>
-          <div className="flex justify-between items-center text-sm text-gray-500">
-            <div>Creado: {selectedRequest.createdAt ? new Date(Number(selectedRequest.createdAt)).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</div>
-            <div>Agente: {selectedRequest.agentName || '-'}</div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
+            <div className="bg-gray-50 border border-gray-100 rounded-xl p-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Usuario</p>
+              <p className="text-sm font-bold text-gray-700 mt-1">{selectedRequest.userName || '-'}</p>
+            </div>
+            <div className="bg-gray-50 border border-gray-100 rounded-xl p-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Agente</p>
+              <p className="text-sm font-bold text-gray-700 mt-1">{selectedRequest.agentName || '-'}</p>
+            </div>
+            <div className="bg-gray-50 border border-gray-100 rounded-xl p-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Creado</p>
+              <p className="text-sm font-bold text-gray-700 mt-1">{selectedRequest.createdAt ? new Date(Number(selectedRequest.createdAt)).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</p>
+            </div>
+            <div className="bg-gray-50 border border-gray-100 rounded-xl p-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Cierre</p>
+              <p className="text-sm font-bold text-gray-700 mt-1">{selectedRequest.completedAt ? new Date(Number(selectedRequest.completedAt)).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</p>
+            </div>
           </div>
+
+          <div className="mb-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Descripción</p>
+            <div className="prose max-w-none text-sm text-gray-700 whitespace-pre-wrap bg-white border border-gray-100 rounded-xl p-3">{selectedRequest.description || 'Sin descripción adicional.'}</div>
+          </div>
+
+          {!!selectedRequest.aiSummary && (
+            <div className="mb-4 p-3 rounded-xl border border-gray-100 bg-gray-50">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Resumen IA</p>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">{selectedRequest.aiSummary}</p>
+            </div>
+          )}
+
+          {(selectedRequest.status === 'completed' || selectedRequest.status === 'cancelled') && selectedRequest.closeComment && (
+            <div className="mb-4 p-3 rounded-xl border border-indigo-100 bg-indigo-50/40">
+              <p className="text-[10px] font-black uppercase tracking-widest text-indigo-500 mb-1">Gestión de cierre</p>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">{selectedRequest.closeComment}</p>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -307,7 +521,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                       <td className="p-3 text-sm font-black">
                         <span className={`text-[9px] px-2 py-1 rounded ${req.status === 'waiting' ? 'bg-amber-50 text-amber-600' : req.status === 'in-progress' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>{statusLabel(req.status)}</span>
                       </td>
-                      <td className="p-3 text-sm text-indigo-600 font-black">{req.agentName || '-'}</td>
+                      <td className="p-3 text-sm text-indigo-600 font-black" title={req.agentName || '-'}>
+                        <span className="block truncate max-w-[9rem]">{shortAgentName(req.agentName)}</span>
+                      </td>
                       <td className="p-3 text-sm text-gray-500">{new Date(Number(req.createdAt)).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
                       <td className="p-3 text-sm text-gray-500">{renderElapsedFor(req)}</td>
                       <td className="p-3 text-sm">
@@ -320,8 +536,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                             <div className="flex items-center space-x-2">
                               <button title="Pausar" onClick={() => onUpdateStatus(req.id, 'paused')} className="bg-yellow-50 text-amber-600 p-2 rounded-xl hover:bg-amber-100 transition-all flex items-center justify-center"><Pause size={16} /></button>
                               <button title="Volver a la cola" onClick={() => onUpdateStatus(req.id, 'waiting')} className="bg-gray-100 text-gray-500 p-2 rounded-xl hover:bg-gray-200 transition-all"><RotateCcw size={16}/></button>
-                              <button title="Cancelar Ticket" onClick={() => onUpdateStatus(req.id, 'cancelled')} className="bg-red-50 text-red-400 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all"><XCircle size={16}/></button>
-                              <button title="Cerrar como Solucionado" onClick={() => onUpdateStatus(req.id, 'completed')} className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"><CheckCircle size={16}/></button>
+                              <button title="Cancelar Ticket" onClick={() => handleCloseTicket(req, 'cancelled')} className="bg-red-50 text-red-400 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all"><XCircle size={16}/></button>
+                              <button title="Cerrar como Solucionado" onClick={() => handleCloseTicket(req, 'completed')} className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"><CheckCircle size={16}/></button>
                               <button onClick={() => openTeamsChat(req.userId, req.id)} className="text-[10px] font-black text-indigo-600 hover:underline flex items-center space-x-1 ml-2">
                                 <MessageCircle size={14} />
                                 <span>Contactar</span>
@@ -332,8 +548,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                           {req.status === 'paused' && (
                             <div className="flex items-center space-x-2">
                               <button title="Reanudar" onClick={() => onUpdateStatus(req.id, 'in-progress')} className="bg-indigo-600 text-white p-2 rounded-xl hover:bg-indigo-700 transition-all flex items-center justify-center"><Play size={16} /></button>
-                              <button title="Cancelar Ticket" onClick={() => onUpdateStatus(req.id, 'cancelled')} className="bg-red-50 text-red-400 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all"><XCircle size={16} /></button>
-                              <button title="Cerrar como Solucionado" onClick={() => onUpdateStatus(req.id, 'completed')} className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"><CheckCircle size={16} /></button>
+                              <button title="Cancelar Ticket" onClick={() => handleCloseTicket(req, 'cancelled')} className="bg-red-50 text-red-400 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all"><XCircle size={16} /></button>
+                              <button title="Cerrar como Solucionado" onClick={() => handleCloseTicket(req, 'completed')} className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"><CheckCircle size={16} /></button>
                               <button onClick={() => openTeamsChat(req.userId, req.id)} className="text-[10px] font-black text-indigo-600 hover:underline flex items-center space-x-1 ml-2">
                                 <MessageCircle size={14} />
                                 <span>Contactar</span>
@@ -379,14 +595,14 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                         </button>
                         <button 
                           title="Cancelar Ticket"
-                          onClick={() => onUpdateStatus(req.id, 'cancelled')} 
+                          onClick={() => handleCloseTicket(req, 'cancelled')} 
                           className="bg-red-50 text-red-400 p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all"
                         >
                           <XCircle size={16}/>
                         </button>
                         <button 
                           title="Cerrar como Solucionado"
-                          onClick={() => onUpdateStatus(req.id, 'completed')} 
+                          onClick={() => handleCloseTicket(req, 'completed')} 
                           className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"
                         >
                           <CheckCircle size={16}/>
@@ -493,20 +709,74 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
               </div>
             </div>
 
-            <div className="mb-6 bg-gray-50 p-4 rounded-2xl border border-gray-100">
-              <p className="text-sm font-black mb-2">Override local (QA)</p>
-              <p className="text-xs text-gray-500 mb-3">Si Teams no provee el correo correctamente en QA, puedes forzar tu email localmente para probar como agente.</p>
-              <div className="flex items-center space-x-2">
-                <input type="email" placeholder="correo@dominio.com" value={localAgentEmail} onChange={e => setLocalAgentEmail(e.target.value)} className="flex-1 bg-white border border-gray-200 px-4 py-2 rounded-xl outline-none" />
-                <button onClick={() => {
-                  try {
-                    if (localAgentEmail) localStorage.setItem('localAgentEmail', localAgentEmail.toLowerCase());
-                    else localStorage.removeItem('localAgentEmail');
-                    if (typeof onRefreshAgents === 'function') onRefreshAgents();
-                    alert('Valor guardado localmente. Refresca la app si es necesario.');
-                  } catch (e) { console.error(e); alert('No se pudo guardar en localStorage'); }
-                }} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-black">Guardar</button>
-                <button onClick={() => { try { localStorage.removeItem('localAgentEmail'); setLocalAgentEmail(''); if (typeof onRefreshAgents === 'function') onRefreshAgents(); } catch (e) {} }} className="bg-red-50 text-red-600 px-4 py-2 rounded-xl font-black">Quitar</button>
+            <div className="flex items-center justify-between mb-6 p-4 bg-red-50 rounded-2xl border border-red-100">
+              <div>
+                <p className="text-sm font-black text-red-800">Modo Testing (QA)</p>
+                <p className="text-xs text-red-600">Cuando está activo, la app opera en entorno QA y muestra badge rojo.</p>
+              </div>
+              <div>
+                <label className="inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="hidden"
+                    checked={testingMode}
+                    onChange={() => onToggleTestingMode && onToggleTestingMode()}
+                  />
+                  <span className={`w-12 h-6 inline-block rounded-full transition-colors ${testingMode ? 'bg-red-600' : 'bg-gray-300'}`}></span>
+                </label>
+              </div>
+            </div>
+
+            <div className="mb-6 bg-red-50 p-4 rounded-2xl border border-red-100">
+              <p className="text-sm font-black mb-2 text-red-800">Usuarios de Testing (auto QA)</p>
+              <p className="text-xs text-red-600 mb-3">Si un usuario de esta lista inicia sesión, la app operará automáticamente contra la base QA.</p>
+              <div className="flex items-center space-x-2 mb-3">
+                <input
+                  type="email"
+                  placeholder="usuario@dominio.com"
+                  value={newTestingEmail}
+                  onChange={e => setNewTestingEmail(e.target.value)}
+                  className="flex-1 bg-white border border-red-200 px-4 py-2 rounded-xl outline-none"
+                />
+                <button
+                  onClick={async () => {
+                    const email = newTestingEmail.trim().toLowerCase();
+                    if (!email || !email.includes('@')) {
+                      alert('Ingrese un email válido');
+                      return;
+                    }
+                    try {
+                      await storageService.addTestingUser(email);
+                      const updated = await storageService.fetchTestingUsers();
+                      setTestingUsers(updated.map(String));
+                      setNewTestingEmail('');
+                    } catch (e) {
+                      console.error(e);
+                      alert('No se pudo agregar el usuario testing');
+                    }
+                  }}
+                  className="bg-red-600 text-white px-4 py-2 rounded-xl font-black"
+                >Agregar</button>
+              </div>
+              <div className="space-y-2">
+                {testingUsers.length === 0 && <p className="text-xs text-red-500">No hay usuarios testing configurados.</p>}
+                {testingUsers.map(email => (
+                  <div key={email} className="flex items-center justify-between p-3 bg-white rounded-xl border border-red-100">
+                    <span className="text-sm font-bold text-gray-700">{email}</span>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await storageService.removeTestingUser(email);
+                          setTestingUsers(prev => prev.filter(e => e !== email));
+                        } catch (e) {
+                          console.error(e);
+                          alert('No se pudo quitar el usuario testing');
+                        }
+                      }}
+                      className="text-red-600 text-xs font-black px-3 py-1 rounded-lg bg-red-50 hover:bg-red-100"
+                    >Quitar</button>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -585,37 +855,89 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
         </div>
       ) : (
         /* Historial Table */
-        <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm animate-in fade-in">
-           <table className="w-full text-left text-xs border-collapse table-fixed">
+        <div className="bg-white rounded-[2rem] border border-gray-100 overflow-x-auto shadow-sm animate-in fade-in">
+           <table className="w-full text-left text-xs border-collapse table-auto">
                 <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
-                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-28">ID</th>
-                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-56">Usuario</th>
-                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-1/2">Asunto</th>
-                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-56">Agente</th>
-                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-44">Creado</th>
-                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-44">Cierre</th>
-                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-28">Estado</th>
-                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-36">Acciones</th>
+                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-24 cursor-pointer" onClick={() => toggleHistorySort('id')}>ID{getSortLabel('id')}</th>
+                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-48 cursor-pointer" onClick={() => toggleHistorySort('userName')}>Usuario{getSortLabel('userName')}</th>
+                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-[22%] min-w-[170px] cursor-pointer" onClick={() => toggleHistorySort('subject')}>Asunto{getSortLabel('subject')}</th>
+                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-28 cursor-pointer" onClick={() => toggleHistorySort('agentName')}>Agente{getSortLabel('agentName')}</th>
+                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-44 cursor-pointer" onClick={() => toggleHistorySort('createdAt')}>Creado{getSortLabel('createdAt')}</th>
+                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-44 cursor-pointer" onClick={() => toggleHistorySort('completedAt')}>Cierre{getSortLabel('completedAt')}</th>
+                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-28 cursor-pointer" onClick={() => toggleHistorySort('status')}>Estado{getSortLabel('status')}</th>
+                    <th className="p-4 font-black text-gray-400 uppercase text-[9px] w-44 sticky right-0 z-20 bg-gray-50">Acciones</th>
+                  </tr>
+                  <tr className="bg-white border-b border-gray-100">
+                    <th className="p-2">
+                      <div className="space-y-1">
+                        <input value={historyFilters.id} onChange={e => setHistoryFilters(prev => ({ ...prev, id: e.target.value }))} className="w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-[10px]" placeholder="Filtrar" />
+                        <select value={historyMatchMode.id} onChange={e => setHistoryMatchMode(prev => ({ ...prev, id: e.target.value as 'contains' | 'startsWith' }))} className="w-full bg-white border border-gray-200 rounded px-2 py-1 text-[10px]">
+                          <option value="contains">Contiene</option>
+                          <option value="startsWith">Empieza con</option>
+                        </select>
+                      </div>
+                    </th>
+                    <th className="p-2">
+                      <div className="space-y-1">
+                        <input value={historyFilters.userName} onChange={e => setHistoryFilters(prev => ({ ...prev, userName: e.target.value }))} className="w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-[10px]" placeholder="Filtrar" />
+                        <select value={historyMatchMode.userName} onChange={e => setHistoryMatchMode(prev => ({ ...prev, userName: e.target.value as 'contains' | 'startsWith' }))} className="w-full bg-white border border-gray-200 rounded px-2 py-1 text-[10px]">
+                          <option value="contains">Contiene</option>
+                          <option value="startsWith">Empieza con</option>
+                        </select>
+                      </div>
+                    </th>
+                    <th className="p-2">
+                      <div className="space-y-1">
+                        <input value={historyFilters.subject} onChange={e => setHistoryFilters(prev => ({ ...prev, subject: e.target.value }))} className="w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-[10px]" placeholder="Filtrar" />
+                        <select value={historyMatchMode.subject} onChange={e => setHistoryMatchMode(prev => ({ ...prev, subject: e.target.value as 'contains' | 'startsWith' }))} className="w-full bg-white border border-gray-200 rounded px-2 py-1 text-[10px]">
+                          <option value="contains">Contiene</option>
+                          <option value="startsWith">Empieza con</option>
+                        </select>
+                      </div>
+                    </th>
+                    <th className="p-2">
+                      <div className="space-y-1">
+                        <input value={historyFilters.agentName} onChange={e => setHistoryFilters(prev => ({ ...prev, agentName: e.target.value }))} className="w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-[10px]" placeholder="Filtrar" />
+                        <select value={historyMatchMode.agentName} onChange={e => setHistoryMatchMode(prev => ({ ...prev, agentName: e.target.value as 'contains' | 'startsWith' }))} className="w-full bg-white border border-gray-200 rounded px-2 py-1 text-[10px]">
+                          <option value="contains">Contiene</option>
+                          <option value="startsWith">Empieza con</option>
+                        </select>
+                      </div>
+                    </th>
+                    <th className="p-2"></th>
+                    <th className="p-2"></th>
+                    <th className="p-2">
+                      <select value={historyFilters.status} onChange={e => setHistoryFilters(prev => ({ ...prev, status: e.target.value as '' | 'completed' | 'cancelled' }))} className="w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-[10px]">
+                        <option value="">Todos</option>
+                        <option value="completed">Resuelto</option>
+                        <option value="cancelled">Cancelado</option>
+                      </select>
+                    </th>
+                    <th className="p-2">
+                      <button onClick={resetHistoryFilters} className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200 rounded px-2 py-1 text-[10px] font-black uppercase tracking-wide">Limpiar</button>
+                    </th>
                   </tr>
                 </thead>
               <tbody className="divide-y divide-gray-50">
                 {(() => {
                   const startIdx = (historyPage - 1) * ITEMS_PER_PAGE;
                   const endIdx = startIdx + ITEMS_PER_PAGE;
-                  return completed.slice(startIdx, endIdx).map(req => (
-                    <tr key={req.id} className="hover:bg-gray-50 transition-colors">
+                  return historyRows.slice(startIdx, endIdx).map(req => (
+                    <tr key={req.id} className="group hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => setSelectedRequest(req)}>
                       <td className="p-4 font-black text-gray-900">{req.id}</td>
                       <td className="p-4 font-black text-gray-900">{req.userName}</td>
                       <td className="p-4 font-bold text-gray-600">
-                        <div className="relative group max-w-[28rem]">
-                          <span onClick={() => setSelectedRequest(req)} role="button" tabIndex={0} className="block truncate cursor-pointer hover:underline">{req.subject}</span>
+                        <div className="relative max-w-[14rem] xl:max-w-[18rem]">
+                          <span className="block truncate hover:underline">{req.subject}</span>
                           <div className="hidden group-hover:block absolute left-0 top-full mt-2 z-50 w-[min(60vw,40rem)] max-h-[35vh] overflow-auto bg-white p-3 rounded-lg shadow-lg border border-gray-100 text-sm text-gray-700 whitespace-pre-wrap">
                             {(req.description && req.description.length > 0) ? `${req.subject} — ${req.description}` : req.subject}
                           </div>
                         </div>
                       </td>
-                      <td className="p-4 font-black text-indigo-600">{req.agentName || '-'}</td>
+                      <td className="p-4 font-black text-indigo-600" title={req.agentName || '-'}>
+                        <span className="block truncate max-w-[9rem]">{shortAgentName(req.agentName)}</span>
+                      </td>
                       <td className="p-4 text-gray-500">{req.createdAt ? new Date(Number(req.createdAt)).toLocaleString('es-ES', {
                         day: '2-digit', month: '2-digit', year: 'numeric',
                         hour: '2-digit', minute: '2-digit'
@@ -625,14 +947,26 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                           day: '2-digit', month: '2-digit', year: 'numeric',
                           hour: '2-digit', minute: '2-digit'
                         }) : '-'}
+                        {req.closeComment && <div className="mt-1 text-[10px] text-gray-600 truncate" title={req.closeComment}>{req.closeComment}</div>}
                       </td>
                       <td className="p-4">
                         <span className={`text-[8px] font-black px-2 py-1 rounded uppercase ${req.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
                           {statusLabel(req.status).toUpperCase()}
                         </span>
                       </td>
-                      <td className="p-4 w-36">
-                        <button onClick={() => onUpdateStatus(req.id, 'waiting')} className="bg-indigo-50 text-indigo-600 text-[9px] font-black px-3 py-2 rounded-xl flex items-center space-x-2"><RotateCcw size={14}/><span>REABRIR</span></button>
+                      <td className="p-4 w-44 sticky right-0 z-10 bg-white group-hover:bg-gray-50 whitespace-nowrap">
+                        <div className="flex items-center space-x-2">
+                          <button
+                            title="Ver detalle"
+                            onClick={(e) => { e.stopPropagation(); setSelectedRequest(req); }}
+                            className="bg-gray-100 text-gray-700 p-2 rounded-xl flex items-center justify-center"
+                          ><Eye size={14}/></button>
+                          <button
+                            title="Reabrir ticket"
+                            onClick={(e) => { e.stopPropagation(); onUpdateStatus(req.id, 'waiting'); }}
+                            className="bg-indigo-50 text-indigo-600 p-2 rounded-xl flex items-center justify-center"
+                          ><RotateCcw size={14}/></button>
+                        </div>
                       </td>
                     </tr>
                   ));
@@ -643,7 +977,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
            {/* Pagination Controls */}
            <div className="bg-gray-50 border-t border-gray-100 p-4 flex items-center justify-between">
              <div className="text-xs text-gray-600 font-bold">
-               Total: <span className="font-black text-gray-900">{completed.length}</span> tickets | Página <span className="font-black text-indigo-600">{historyPage}</span> de <span className="font-black text-indigo-600">{Math.ceil(completed.length / ITEMS_PER_PAGE) || 1}</span>
+               Total: <span className="font-black text-gray-900">{historyRows.length}</span> tickets | Página <span className="font-black text-indigo-600">{historyPage}</span> de <span className="font-black text-indigo-600">{Math.ceil(historyRows.length / ITEMS_PER_PAGE) || 1}</span>
              </div>
              <div className="flex items-center space-x-2">
                <button 
@@ -653,7 +987,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                >Anterior</button>
                
                <div className="flex items-center space-x-1">
-                 {Array.from({ length: Math.ceil(completed.length / ITEMS_PER_PAGE) || 1 }).map((_, idx) => {
+                 {Array.from({ length: Math.ceil(historyRows.length / ITEMS_PER_PAGE) || 1 }).map((_, idx) => {
                    const pageNum = idx + 1;
                    const isActive = pageNum === historyPage;
                    return (
@@ -667,8 +1001,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
                </div>
 
                <button 
-                 onClick={() => setHistoryPage(prev => Math.min(Math.ceil(completed.length / ITEMS_PER_PAGE) || 1, prev + 1))}
-                 disabled={historyPage >= Math.ceil(completed.length / ITEMS_PER_PAGE) || completed.length === 0}
+                 onClick={() => setHistoryPage(prev => Math.min(Math.ceil(historyRows.length / ITEMS_PER_PAGE) || 1, prev + 1))}
+                 disabled={historyPage >= Math.ceil(historyRows.length / ITEMS_PER_PAGE) || historyRows.length === 0}
                  className="px-4 py-2 rounded-xl font-black text-xs uppercase transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-white border border-gray-200 text-gray-700 hover:enabled:bg-gray-100"
                >Siguiente</button>
              </div>
@@ -677,6 +1011,50 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ requests, stats, onUpda
       )}
     </div>
     {renderDetailModal()}
+
+    {showCloseModal && closeModalRequest && (
+      <div className="fixed inset-0 z-60 flex items-center justify-center">
+        <div onClick={() => !isSubmittingClose && setShowCloseModal(false)} className="absolute inset-0 bg-black/40" />
+        <div className="relative z-70 w-[min(95vw,640px)] bg-white rounded-3xl shadow-2xl border border-gray-100 p-7">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h3 className="text-lg font-black text-gray-900">
+                {closeModalStatus === 'completed' ? 'Cerrar como Resuelto' : 'Cerrar como Cancelado'}
+              </h3>
+              <p className="text-xs text-gray-500 mt-1">{closeModalRequest.id} - {closeModalRequest.subject}</p>
+            </div>
+            <button disabled={isSubmittingClose} onClick={() => setShowCloseModal(false)} className="text-gray-400 hover:text-gray-700 disabled:opacity-50"><X size={18} /></button>
+          </div>
+
+          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Comentario de cierre (opcional)</label>
+          <textarea
+            value={closeCommentDraft}
+            onChange={e => setCloseCommentDraft(e.target.value)}
+            rows={4}
+            placeholder="Ej: Se reinició el servicio y el usuario confirmó funcionamiento."
+            className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 focus:border-indigo-600 rounded-2xl font-bold text-sm outline-none resize-none"
+          />
+
+          <div className="pt-4 flex items-center space-x-3">
+            <button
+              type="button"
+              disabled={isSubmittingClose}
+              onClick={submitCloseTicket}
+              className={`flex-1 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center space-x-2 ${closeModalStatus === 'completed' ? 'bg-emerald-600 hover:enabled:bg-emerald-700' : 'bg-red-600 hover:enabled:bg-red-700'} disabled:opacity-50`}
+            >
+              {isSubmittingClose ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+              <span>{isSubmittingClose ? 'Guardando...' : 'Confirmar cierre'}</span>
+            </button>
+            <button
+              type="button"
+              disabled={isSubmittingClose}
+              onClick={() => setShowCloseModal(false)}
+              className="px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest text-gray-600 bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+            >Cancelar</button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* Modal Crear Ticket Personal */}
     {showCreateTicket && (

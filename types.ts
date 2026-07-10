@@ -18,6 +18,7 @@ export interface SupportRequest {
   aiSummary?: string;
   agentId?: string;
   agentName?: string;
+  closeComment?: string;
 }
 
 export interface QueueStats {

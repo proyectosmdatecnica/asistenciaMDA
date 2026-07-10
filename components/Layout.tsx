@@ -9,13 +9,14 @@ import {
 interface LayoutProps {
   children: React.ReactNode;
   role: 'user' | 'agent';
+  testingMode?: boolean;
   onOpenHelp: () => void;
   onSwitchRole?: () => void;
   onAgentRegister?: (email: string) => void;
   pendingCount?: number;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, role, onOpenHelp, onAgentRegister, pendingCount = 0 }) => {
+const Layout: React.FC<LayoutProps> = ({ children, role, testingMode = false, onOpenHelp, onAgentRegister, pendingCount = 0 }) => {
   const [isDebugVisible, setIsDebugVisible] = useState(false);
 
   // Modal state for join-code flow
@@ -134,6 +135,11 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onOpenHelp, onAgentRegi
                }`}>
                 {role === 'agent' ? 'Panel de Agente' : 'Solicitud de Usuario'}
               </span>
+              {testingMode && (
+                <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-red-100 text-red-700 border border-red-200">
+                  Modo Testing (QA)
+                </span>
+              )}
             </div>
           </div>
           
