@@ -229,7 +229,15 @@ const App: React.FC = () => {
     
     let avgMins = 5;
     if (completedTodayCount > 0) {
-      const totalWait = completedToday.reduce((acc, curr) => acc + (Number(curr.startedAt || curr.completedAt || Date.now()) - Number(curr.createdAt)), 0);
+      // KPI diario: no arrastrar antigüedad de tickets viejos/reabiertos.
+      // Se toma el tiempo de espera solo dentro del día actual.
+      const totalWait = completedToday.reduce((acc, curr) => {
+        const openedAt = Number(curr.createdAt || 0);
+        const servedAt = Number(curr.startedAt || curr.completedAt || Date.now());
+        const effectiveStart = Math.max(openedAt, startOfToday);
+        const waitMs = Math.max(0, servedAt - effectiveStart);
+        return acc + waitMs;
+      }, 0);
       avgMins = Math.max(2, Math.round((totalWait / completedTodayCount) / 60000));
     }
     
